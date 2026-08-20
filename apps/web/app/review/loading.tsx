@@ -1,0 +1,2 @@
+export default function ReviewLoading() { return <div className="mx-auto max-w-[1500px] animate-pulse px-8 py-10"><div className="h-7 w-52 rounded bg-stone-200" /><div className="mt-8 grid gap-5 xl:grid-cols-[1fr_390px]"><div className="h-[72vh] rounded-2xl bg-stone-200" /><div className="space-y-4"><div className="h-20 rounded-2xl bg-stone-100" /><div className="h-96 rounded-2xl bg-stone-200" /></div></div></div>; }
+
