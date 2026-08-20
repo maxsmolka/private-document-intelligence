@@ -1,4 +1,4 @@
-.PHONY: dev up down logs test lint format migrate worker reconcile benchmark-ocr
+.PHONY: dev up down logs test lint format migrate worker reconcile benchmark-ocr benchmark-intelligence
 
 dev:
 	docker compose up --build
@@ -35,3 +35,6 @@ reconcile:
 benchmark-ocr:
 	uv run --project apps/api python scripts/generate_benchmark_corpus.py apps/api/benchmark-corpus
 	cd apps/api && uv run pdi-benchmark-ocr benchmark-corpus --output benchmark-results.json
+
+benchmark-intelligence:
+	cd apps/api && uv run pdi-benchmark-intelligence tests/fixtures/intelligence_corpus.json --output intelligence-results.json

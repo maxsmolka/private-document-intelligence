@@ -71,12 +71,13 @@ flowchart TD
     R --> D["Derived OCR asset"]
     D --> P["PyPDF text extraction"]
     P --> E
-    E --> V["Review"]
+    E --> I["Versioned intelligence run"]
+    I --> V["Evidence-backed review"]
 ```
 
 ## Proposals and review
 
-Machine-derived proposals are stored in `metadata_proposals` with source, confidence, status, and confirmation time. They never overwrite canonical fields. The review UI presents the original, extraction excerpt, warnings, canonical values, and pending proposals. Confirmation writes title, date, life area, and document type, resolves proposals as accepted or superseded, and sets the document to `ready`. Rejection records a rejected proposal without altering canonical metadata.
+Machine-derived proposals are stored in `metadata_proposals` with source, provider, confidence, structured value, exact evidence, run provenance, status, and confirmation time. They never overwrite canonical fields. Successful analyses are durable `IntelligenceRun` records keyed to an extraction ID and content hash. The review UI presents the original, extraction excerpt, warnings, canonical values, and pending proposals. Field decisions append canonical metadata history; final confirmation sets the document to `ready`. See [Document intelligence](INTELLIGENCE.md).
 
 ## Storage reconciliation
 
@@ -88,4 +89,4 @@ All consumer routes remain under `/api/v1`; health routes remain unversioned. Co
 
 ## Future direction
 
-Milestone 3 may add deterministic and model-backed classification/extraction behind provider boundaries. PostgreSQL full-text search precedes any vector use. Atlas continues to consume only stable HTTP APIs.
+PostgreSQL full-text search precedes any vector use. Search, chat, embeddings, and Atlas integration remain outside Milestone 3; Atlas continues to consume only stable HTTP APIs.

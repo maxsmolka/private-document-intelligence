@@ -30,6 +30,6 @@ PDI does not currently provide antivirus scanning, PDF sanitization, per-user qu
 
 ## Data and provider privacy
 
-Originals, OCR text, metadata proposals, and review history are sensitive. The M2 providers run locally and make no outbound provider calls. A future external intelligence provider must be explicit opt-in, record provenance, minimize transmitted data, redact logs, and preserve PDI as the canonical record. Prompt content must never grant filesystem, database, or network capabilities.
+Originals, OCR text, metadata proposals, and review history are sensitive. Deterministic providers run locally and make no outbound calls. Ollama is optional and must be explicitly enabled on a trusted local endpoint. Document text is untrusted data, never instructions: structured output rejects unknown keys and taxonomy values, input is bounded, exact persisted-text evidence is mandatory, and provider errors are sanitized. No provider can write canonical metadata directly. A future external provider must remain explicit opt-in, minimize transmitted data, and record provenance.
 
 Report vulnerabilities privately to maintainers without attaching sensitive documents to public issues.

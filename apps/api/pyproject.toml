@@ -18,6 +18,7 @@ dependencies = [
 pdi = "pdi.cli:main"
 pdi-worker = "pdi.ingestion.worker:main"
 pdi-benchmark-ocr = "pdi.ingestion.benchmark:main"
+pdi-benchmark-intelligence = "pdi.intelligence.benchmark:main"
 
 [dependency-groups]
 dev = [

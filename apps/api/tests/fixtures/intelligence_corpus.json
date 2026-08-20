@@ -1,0 +1,10 @@
+[
+  {"id":"invoice","text":"Beispiel Handel GmbH\nRechnung\nRechnungsnummer: RE-2026-1001\nRechnungsdatum: 20.08.2026\nGesamtbetrag: 123,45 EUR","expected":{"document_type":"invoice","life_area":"finance","amounts":["123.45 EUR"],"identifiers":["RE-2026-1001"]}},
+  {"id":"insurance","text":"Nordstern Versicherung AG\nVersicherungsschein: POL-9911\nBeginn: 01.09.2026\nBeitrag: 89,00 EUR","expected":{"document_type":"insurance_policy","life_area":"insurance","amounts":["89.00 EUR"],"identifiers":["POL-9911"]}},
+  {"id":"tax","text":"Finanzamt Berlin\nSteuerbescheid\nBescheiddatum: 12.07.2026\nSteuernummer: 12/345/67890","expected":{"document_type":"tax_document","life_area":"tax","identifiers":["12/345/67890"]}},
+  {"id":"contract","text":"Muster Dienste GmbH\nVertrag\nVertragsnummer: V-2026-77\nWirksam ab 01.10.2026","expected":{"document_type":"contract","life_area":"personal","identifiers":["V-2026-77"]}},
+  {"id":"bank","text":"Beispielbank AG\nKontoauszug\nDatum: 31.07.2026","expected":{"document_type":"bank_statement","life_area":"finance"}},
+  {"id":"medical","text":"Praxis Gesundheit GmbH\nPatient: Max Muster\nDiagnose und Behandlung vom 03.08.2026","expected":{"document_type":"medical_document","life_area":"health"}},
+  {"id":"employment","text":"Beispiel Arbeit GmbH\nGehaltsabrechnung\nDatum: 31.07.2026\nBetrag: 2.500,00 EUR","expected":{"document_type":"employment_document","life_area":"work","amounts":["2500.00 EUR"]}},
+  {"id":"unknown","text":"Notizen für den privaten Gebrauch ohne formale Metadaten.","expected":{}}
+]
