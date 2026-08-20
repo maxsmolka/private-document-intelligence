@@ -6,6 +6,7 @@ from typing import Any
 from sqlalchemy import (
     JSON,
     BigInteger,
+    Boolean,
     DateTime,
     Enum,
     Float,
@@ -38,6 +39,12 @@ class ProposalStatus(StrEnum):
     ACCEPTED = "accepted"
     REJECTED = "rejected"
     SUPERSEDED = "superseded"
+
+
+class IntelligenceRunStatus(StrEnum):
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
 
 
 class DocumentAssetKind(StrEnum):
@@ -159,6 +166,46 @@ class DocumentExtraction(Base):
     document: Mapped["Document"] = relationship(back_populates="extraction")
 
 
+class IntelligenceRun(Base):
+    __tablename__ = "intelligence_runs"
+    __table_args__ = (
+        Index("ix_intelligence_runs_document", "document_id", "created_at"),
+        Index("ix_intelligence_runs_current", "document_id", "is_current"),
+        UniqueConstraint("request_key", name="uq_intelligence_runs_request_key"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
+    input_extraction_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("document_extractions.id", ondelete="CASCADE"), nullable=False
+    )
+    input_content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    request_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    provider: Mapped[str] = mapped_column(String(100), nullable=False)
+    provider_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    schema_version: Mapped[str] = mapped_column(String(30), nullable=False)
+    prompt_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    status: Mapped[IntelligenceRunStatus] = mapped_column(
+        Enum(
+            IntelligenceRunStatus,
+            name="intelligence_run_status",
+            values_callable=lambda values: [value.value for value in values],
+        )
+    )
+    is_current: Mapped[bool] = mapped_column(Boolean, default=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    duration_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    error_category: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    sanitized_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    result: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    document: Mapped["Document"] = relationship(back_populates="intelligence_runs")
+    proposals: Mapped[list["MetadataProposal"]] = relationship(back_populates="intelligence_run")
+
+
 class MetadataProposal(Base):
     __tablename__ = "metadata_proposals"
     __table_args__ = (Index("ix_metadata_proposals_review", "document_id", "status"),)
@@ -171,6 +218,16 @@ class MetadataProposal(Base):
     proposed_value: Mapped[str | None] = mapped_column(Text, nullable=True)
     source: Mapped[str] = mapped_column(String(100))
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    structured_value: Mapped[dict[str, Any] | list[Any] | None] = mapped_column(JSON, nullable=True)
+    normalized_value: Mapped[str | None] = mapped_column(Text, nullable=True)
+    provider: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    intelligence_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("intelligence_runs.id", ondelete="CASCADE"), nullable=True
+    )
+    evidence: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    evidence_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    validation_notes: Mapped[list[str]] = mapped_column(JSON, default=list)
+    is_critical: Mapped[bool] = mapped_column(Boolean, default=False)
     status: Mapped[ProposalStatus] = mapped_column(
         Enum(
             ProposalStatus,
@@ -182,6 +239,26 @@ class MetadataProposal(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     document: Mapped["Document"] = relationship(back_populates="metadata_proposals")
+    intelligence_run: Mapped[IntelligenceRun | None] = relationship(back_populates="proposals")
+
+
+class CanonicalMetadataHistory(Base):
+    __tablename__ = "canonical_metadata_history"
+    __table_args__ = (Index("ix_canonical_history_document", "document_id", "confirmed_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
+    field_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    previous_value: Mapped[Any | None] = mapped_column(JSON, nullable=True)
+    new_value: Mapped[Any | None] = mapped_column(JSON, nullable=True)
+    source_proposal_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("metadata_proposals.id", ondelete="SET NULL"), nullable=True
+    )
+    confirmation_source: Mapped[str] = mapped_column(String(50), nullable=False)
+    confirmed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    document: Mapped["Document"] = relationship(back_populates="metadata_history")
 
 
 from pdi.documents.models import Document  # noqa: E402

@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     ocr_max_image_mpixels: float = Field(default=100, gt=0, le=1000)
     ocr_force_rotation: bool = True
     ocr_max_derived_size: int = Field(default=100 * 1024 * 1024, gt=0)
+    intelligence_provider: Literal["deterministic", "ollama"] = "deterministic"
+    intelligence_timeout_seconds: float = Field(default=60, ge=1, le=600)
+    intelligence_max_input_characters: int = Field(default=100_000, ge=1_000)
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = "qwen2.5:7b"
 
 
 @lru_cache

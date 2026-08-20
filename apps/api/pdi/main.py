@@ -7,6 +7,7 @@ from pdi.core.logging import configure_logging
 from pdi.core.middleware import RequestContextMiddleware
 from pdi.documents.router import router as documents_router
 from pdi.ingestion.router import router as review_router
+from pdi.intelligence.router import router as intelligence_router
 
 
 def create_app() -> FastAPI:
@@ -23,6 +24,7 @@ def create_app() -> FastAPI:
     application.include_router(health_router)
     application.include_router(documents_router)
     application.include_router(review_router)
+    application.include_router(intelligence_router)
     return application
 
 

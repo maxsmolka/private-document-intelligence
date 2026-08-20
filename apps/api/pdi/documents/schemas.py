@@ -22,6 +22,7 @@ class DocumentRead(BaseModel):
     life_area: LifeArea
     document_type: str | None
     source: str
+    canonical_metadata: dict[str, object]
 
 
 class DocumentList(BaseModel):

@@ -31,10 +31,12 @@ from pdi.ingestion.models import (
     DocumentExtraction,
     IngestionJob,
     IngestionJobState,
+    IntelligenceRunStatus,
     MetadataProposal,
     ProposalStatus,
 )
 from pdi.ingestion.queue import claim_job, record_failure, recover_stale_jobs, transition_job
+from pdi.intelligence.service import run_intelligence
 from pdi.storage.dependencies import get_storage
 
 logger = logging.getLogger("pdi.worker")
@@ -195,7 +197,19 @@ async def process_job(
         worker_id=worker_id,
     )
     persistence_started = time.perf_counter()
-    await persist_extraction(session, document.id, result)
+    extraction = await persist_extraction(session, document.id, result)
+    job.stage = "document_intelligence"
+    job.heartbeat_at = datetime.now(UTC)
+    await session.commit()
+    intelligence_run = await run_intelligence(
+        session,
+        document=document,
+        extraction=extraction,
+        settings=settings,
+        request_key=f"ingestion:{job.id}:attempt:{job.attempt_count}",
+    )
+    if intelligence_run.status == IntelligenceRunStatus.FAILED:
+        extraction.warnings = [*extraction.warnings, "document_intelligence_failed"]
     await ensure_metadata_proposals(session, document)
     document.status = DocumentStatus.NEEDS_REVIEW
     transition_job(

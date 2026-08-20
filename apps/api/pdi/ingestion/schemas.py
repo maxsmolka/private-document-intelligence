@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -6,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from pdi.documents.models import LifeArea
 from pdi.documents.schemas import DocumentRead
 from pdi.ingestion.models import DocumentAssetKind, IngestionJobState, ProposalStatus
+from pdi.intelligence.schemas import CanonicalMetadataHistoryRead, IntelligenceRunRead
 
 
 class IngestionJobRead(BaseModel):
@@ -65,8 +67,16 @@ class MetadataProposalRead(BaseModel):
     document_id: UUID
     field_name: str
     proposed_value: str | None
+    normalized_value: str | None
+    structured_value: dict[str, Any] | list[Any] | None
     source: str
+    provider: str | None
+    intelligence_run_id: UUID | None
     confidence: float | None
+    evidence: list[dict[str, Any]]
+    evidence_verified: bool
+    validation_notes: list[str]
+    is_critical: bool
     status: ProposalStatus
     created_at: datetime
     confirmed_at: datetime | None
@@ -91,6 +101,14 @@ class ReviewDetail(BaseModel):
     proposals: list[MetadataProposalRead]
     latest_job: IngestionJobRead | None
     assets: list[DocumentAssetRead]
+    current_intelligence_run: IntelligenceRunRead | None
+    metadata_history: list[CanonicalMetadataHistoryRead]
+
+
+class IntelligenceOverview(BaseModel):
+    current_run: IntelligenceRunRead | None
+    runs: list[IntelligenceRunRead]
+    proposals: list[MetadataProposalRead]
 
 
 class ConfirmMetadata(BaseModel):
@@ -102,3 +120,7 @@ class ConfirmMetadata(BaseModel):
 
 class RejectProposals(BaseModel):
     field_names: list[str] | None = None
+
+
+class ProposalDecision(BaseModel):
+    value: str | None = Field(default=None, min_length=1, max_length=500)

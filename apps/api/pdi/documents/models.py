@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime
 from enum import StrEnum
 
-from sqlalchemy import BigInteger, Date, DateTime, Enum, Index, String, Uuid, func
+from sqlalchemy import JSON, BigInteger, Date, DateTime, Enum, Index, String, Uuid, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -65,6 +65,7 @@ class Document(Base):
     )
     document_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
     source: Mapped[str] = mapped_column(String(100), default="upload")
+    canonical_metadata: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
     ingestion_jobs: Mapped[list["IngestionJob"]] = relationship(
         back_populates="document", cascade="all, delete-orphan"
     )
@@ -77,11 +78,19 @@ class Document(Base):
     assets: Mapped[list["DocumentAsset"]] = relationship(
         back_populates="document", cascade="all, delete-orphan"
     )
+    intelligence_runs: Mapped[list["IntelligenceRun"]] = relationship(
+        back_populates="document", cascade="all, delete-orphan"
+    )
+    metadata_history: Mapped[list["CanonicalMetadataHistory"]] = relationship(
+        back_populates="document", cascade="all, delete-orphan"
+    )
 
 
 from pdi.ingestion.models import (  # noqa: E402
+    CanonicalMetadataHistory,
     DocumentAsset,
     DocumentExtraction,
     IngestionJob,
+    IntelligenceRun,
     MetadataProposal,
 )
