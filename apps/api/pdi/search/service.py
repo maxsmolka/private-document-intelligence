@@ -25,6 +25,7 @@ MAX_SNIPPETS = 2
 SEARCHABLE_CANONICAL_FIELDS = {
     "organization",
     "identifier",
+    "contract",
     "amount",
     "document_date",
     "due_date",
@@ -87,6 +88,12 @@ def scalar_values(value: object) -> list[str]:
 def canonical_field_values(document: Document, field_name: str) -> list[str]:
     value = (document.canonical_metadata or {}).get(field_name)
     if isinstance(value, dict):
+        if field_name == "contract":
+            return [
+                item
+                for key in ("title", "reference_identifier")
+                for item in scalar_values(value.get(key))
+            ]
         preferred = (
             ("name", "value")
             if field_name == "organization"

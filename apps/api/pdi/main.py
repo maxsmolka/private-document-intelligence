@@ -8,6 +8,7 @@ from pdi.core.middleware import RequestContextMiddleware
 from pdi.documents.router import router as documents_router
 from pdi.ingestion.router import router as review_router
 from pdi.intelligence.router import router as intelligence_router
+from pdi.knowledge.router import router as knowledge_router
 from pdi.search.router import router as search_router
 
 
@@ -27,6 +28,7 @@ def create_app() -> FastAPI:
     application.include_router(review_router)
     application.include_router(intelligence_router)
     application.include_router(search_router)
+    application.include_router(knowledge_router)
     return application
 
 

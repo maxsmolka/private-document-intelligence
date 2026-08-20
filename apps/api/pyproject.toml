@@ -20,6 +20,7 @@ pdi-worker = "pdi.ingestion.worker:main"
 pdi-benchmark-ocr = "pdi.ingestion.benchmark:main"
 pdi-benchmark-intelligence = "pdi.intelligence.benchmark:main"
 pdi-benchmark-retrieval = "pdi.search.benchmark:main"
+pdi-benchmark-knowledge = "pdi.knowledge.benchmark:main"
 
 [dependency-groups]
 dev = [

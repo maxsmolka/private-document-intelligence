@@ -37,6 +37,7 @@ from pdi.ingestion.models import (
 )
 from pdi.ingestion.queue import claim_job, record_failure, recover_stale_jobs, transition_job
 from pdi.intelligence.service import run_intelligence
+from pdi.knowledge.extraction import generate_knowledge_proposals
 from pdi.search.service import refresh_search_index
 from pdi.storage.dependencies import get_storage
 
@@ -211,6 +212,21 @@ async def process_job(
     )
     if intelligence_run.status == IntelligenceRunStatus.FAILED:
         extraction.warnings = [*extraction.warnings, "document_intelligence_failed"]
+    else:
+        try:
+            async with session.begin_nested():
+                await generate_knowledge_proposals(
+                    session,
+                    document=document,
+                    extraction=extraction,
+                    run=intelligence_run,
+                )
+        except Exception:
+            extraction.warnings = [*extraction.warnings, "knowledge_extraction_failed"]
+            logger.exception(
+                "knowledge_extraction_failed",
+                extra={"document_id": str(document.id), "operation": "knowledge_extraction"},
+            )
     await ensure_metadata_proposals(session, document)
     document.status = DocumentStatus.NEEDS_REVIEW
     await refresh_search_index(session, document, extraction)

@@ -11,6 +11,7 @@ COPY pdi ./pdi
 COPY migrations ./migrations
 COPY alembic.ini ./
 COPY tests/fixtures/retrieval_corpus.json ./benchmark-corpus/retrieval.json
+COPY tests/fixtures/knowledge_corpus.json ./benchmark-corpus/knowledge.json
 RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked --no-dev
 
 FROM builder AS test

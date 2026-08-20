@@ -1,6 +1,7 @@
 import asyncio
 import os
 from collections.abc import AsyncIterator
+from datetime import date
 
 import pytest
 from sqlalchemy import text
@@ -9,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from pdi.documents.models import Base, Document, DocumentStatus, LifeArea
 from pdi.ingestion.models import DocumentExtraction, IngestionJob
 from pdi.ingestion.queue import claim_job, enqueue_document
+from pdi.knowledge.models import DatePrecision, EventType, Organization, TimelineEvent
 from pdi.search.service import refresh_search_index, search_documents
 
 
@@ -112,3 +114,57 @@ async def test_postgres_fts_ranking_identifier_filter_and_gin_plan(
             )
         )
         assert "ix_search_documents_vector" in str(plan)
+
+
+async def test_postgres_knowledge_foreign_keys_and_timeline_index(
+    postgres_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with postgres_factory() as session:
+        document = Document(
+            title="Indexed event",
+            original_filename="event.pdf",
+            mime_type="application/pdf",
+            file_size=10,
+            sha256="9" * 64,
+            storage_key="event.pdf",
+            status=DocumentStatus.READY,
+            life_area=LifeArea.INSURANCE,
+            source="test",
+        )
+        extraction = DocumentExtraction(
+            document=document,
+            provider="test",
+            provider_version="1",
+            method="native_pdf",
+            text="Vertragsbeginn: 01.08.2026",
+            page_count=1,
+            pages=["Vertragsbeginn: 01.08.2026"],
+            content_hash="8" * 64,
+            warnings=[],
+            extraction_metadata={},
+        )
+        organization = Organization(canonical_name="Generali", normalized_name="generali")
+        session.add_all([document, organization])
+        await session.flush()
+        event = TimelineEvent(
+            event_type=EventType.CONTRACT_STARTED,
+            title="Contract started",
+            event_date=date(2026, 8, 1),
+            event_date_precision=DatePrecision.EXACT,
+            life_area=LifeArea.INSURANCE,
+            organization_id=organization.id,
+            source_document_id=document.id,
+            source_extraction_id=extraction.id,
+            evidence=[],
+        )
+        session.add(event)
+        await session.commit()
+        assert event.organization_id == organization.id
+        await session.execute(text("SET LOCAL enable_seqscan = off"))
+        plan = await session.scalar(
+            text(
+                "EXPLAIN (FORMAT JSON) SELECT id FROM timeline_events "
+                "ORDER BY event_date, id LIMIT 50"
+            )
+        )
+        assert "ix_timeline_events_date" in str(plan)
