@@ -6,7 +6,7 @@ PDI is the authoritative, local-first system of record for documents, originals,
 
 Atlas Personal Intelligence is a future API consumer. Atlas may reason over PDI data and retain derived reasoning, but it must never read PDI's PostgreSQL database or storage volume. PDI-derived facts remain authoritative in PDI.
 
-Authentication, LLM extraction, semantic search, embeddings, Atlas integration, Paperless import, and external ingestion are not part of Milestone 2.1.
+Authentication, semantic search, embeddings, Atlas integration, Paperless import, and external ingestion are not part of Milestone 4.
 
 ## System context
 
@@ -73,6 +73,8 @@ flowchart TD
     P --> E
     E --> I["Versioned intelligence run"]
     I --> V["Evidence-backed review"]
+    E --> X["Weighted PostgreSQL search row"]
+    V --> X
 ```
 
 ## Proposals and review
@@ -85,8 +87,12 @@ Machine-derived proposals are stored in `metadata_proposals` with source, provid
 
 ## API and pagination
 
-All consumer routes remain under `/api/v1`; health routes remain unversioned. Collection endpoints use zero-based `offset`, bounded `limit`, deterministic ordering, and a total count. UUIDs are opaque. M2 adds `/documents/{id}/text`, `/documents/{id}/retry`, and `/review` resources while preserving M1 contracts.
+All consumer routes remain under `/api/v1`; health routes remain unversioned. Collection endpoints use zero-based `offset`, bounded `limit`, deterministic ordering, and a total count. UUIDs are opaque. Search adds a schema-versioned result envelope while preserving all earlier contracts.
+
+## Retrieval
+
+`search_documents` is an explicit, content-hashed projection of approved canonical fields and normalized extraction text. The API and worker update it synchronously inside source transactions; migration backfill and idempotent rebuild cover existing data and maintenance. PostgreSQL uses German weighted vectors, GIN retrieval, and an exact accepted-identifier expression index. Ranking combines `ts_rank_cd` with four documented exact-field boosts. Snippets are bounded slices of persisted page text with structured highlight ranges. See [Retrieval](RETRIEVAL.md), [benchmark](RETRIEVAL_BENCHMARK.md), and [ADR 0003](adr/0003-postgresql-fts-baseline.md).
 
 ## Future direction
 
-PostgreSQL full-text search precedes any vector use. Search, chat, embeddings, and Atlas integration remain outside Milestone 3; Atlas continues to consume only stable HTTP APIs.
+Document Knowledge & Life Model work may build organizations, contracts, events, deadlines, relationships, and provenance on PostgreSQL. Chat, embeddings, and Atlas integration remain future work; Atlas continues to consume only stable HTTP APIs.

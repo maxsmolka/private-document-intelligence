@@ -19,6 +19,8 @@ PDI Milestone 2.1 has no authentication or authorization and must not be exposed
 - OCR is capped at 100 pages, 100 megapixels per page, 100 MiB derived output, one subprocess job, and one worker by default
 - original assets are immutable; derived files are atomically promoted under content-addressed keys
 - reconciliation is dry-run by default and cleanup never deletes recoverable originals or missing database records
+- search uses bound parameters, human-safe `websearch_to_tsquery`, a 200-character query cap, and bounded result/snippet sizes
+- highlight ranges describe exact persisted strings; the API never emits generated search HTML
 
 ## Malformed documents and resource exhaustion
 
@@ -31,5 +33,7 @@ PDI does not currently provide antivirus scanning, PDF sanitization, per-user qu
 ## Data and provider privacy
 
 Originals, OCR text, metadata proposals, and review history are sensitive. Deterministic providers run locally and make no outbound calls. Ollama is optional and must be explicitly enabled on a trusted local endpoint. Document text is untrusted data, never instructions: structured output rejects unknown keys and taxonomy values, input is bounded, exact persisted-text evidence is mandatory, and provider errors are sanitized. No provider can write canonical metadata directly. A future external provider must remain explicit opt-in, minimize transmitted data, and record provenance.
+
+Search queries and snippets remain inside the API, PostgreSQL, and browser session. Query text is passed only as a bound value and is not written to structured logs; logs record only whether a query existed, duration, and result count. PDI does not support wildcards or raw `tsquery` syntax. Offset, limit, and filters are validated before SQL execution. Semantic retrieval and remote embeddings are disabled because they were not justified by the M4 benchmark, so search introduces no external content or query transfer.
 
 Report vulnerabilities privately to maintainers without attaching sensitive documents to public issues.
