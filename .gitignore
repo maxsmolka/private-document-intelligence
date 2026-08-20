@@ -16,6 +16,7 @@ htmlcov/
 benchmark-corpus/
 benchmark-results.json
 intelligence-results.json
+retrieval-results.json
 *.db
 *.sqlite*
 .DS_Store

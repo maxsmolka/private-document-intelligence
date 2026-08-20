@@ -1,4 +1,4 @@
-.PHONY: dev up down logs test lint format migrate worker reconcile benchmark-ocr benchmark-intelligence
+.PHONY: dev up down logs test lint format migrate worker reconcile benchmark-ocr benchmark-intelligence benchmark-retrieval rebuild-search
 
 dev:
 	docker compose up --build
@@ -38,3 +38,9 @@ benchmark-ocr:
 
 benchmark-intelligence:
 	cd apps/api && uv run pdi-benchmark-intelligence tests/fixtures/intelligence_corpus.json --output intelligence-results.json
+
+benchmark-retrieval:
+	docker compose exec -T api pdi-benchmark-retrieval benchmark-corpus/retrieval.json
+
+rebuild-search:
+	docker compose exec -T api pdi search rebuild

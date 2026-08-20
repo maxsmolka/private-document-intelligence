@@ -1,10 +1,12 @@
 from pathlib import Path
 
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from pdi.documents.models import Document, DocumentStatus, LifeArea
 from pdi.ingestion.models import DocumentExtraction, MetadataProposal, ProposalStatus
+from pdi.search.models import SearchDocument
 
 
 async def seed_review(session: AsyncSession, suffix: str = "one") -> Document:
@@ -74,6 +76,14 @@ async def test_review_queue_detail_text_and_confirm(
     assert confirmed.json()["title"] == "Confirmed title"
     assert confirmed.json()["life_area"] == "finance"
     assert (await client.get("/api/v1/review")).json()["total"] == 0
+    async with session_factory() as session:
+        indexed = await session.scalar(
+            select(SearchDocument).where(SearchDocument.document_id == document_id)
+        )
+        assert indexed is not None
+        assert indexed.title_text == "Confirmed title"
+        assert "invoice" in indexed.metadata_text
+        assert "finance" in indexed.metadata_text
 
 
 async def test_reject_proposal_and_retry_endpoint(

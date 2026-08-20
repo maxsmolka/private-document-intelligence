@@ -3,11 +3,13 @@ import os
 from collections.abc import AsyncIterator
 
 import pytest
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from pdi.documents.models import Base, Document, DocumentStatus, LifeArea
-from pdi.ingestion.models import IngestionJob
+from pdi.ingestion.models import DocumentExtraction, IngestionJob
 from pdi.ingestion.queue import claim_job, enqueue_document
+from pdi.search.service import refresh_search_index, search_documents
 
 
 @pytest.fixture
@@ -52,3 +54,61 @@ async def test_concurrent_postgres_claims_are_distinct(
     first, second = await asyncio.gather(claim("one"), claim("two"))
     assert first is not None and second is not None
     assert first.id != second.id
+
+
+async def test_postgres_fts_ranking_identifier_filter_and_gin_plan(
+    postgres_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with postgres_factory() as session:
+        document = Document(
+            title="Generali Beitragsanpassung",
+            original_filename="generali.pdf",
+            mime_type="application/pdf",
+            file_size=100,
+            sha256="f" * 64,
+            storage_key="postgres-search.pdf",
+            status=DocumentStatus.READY,
+            life_area=LifeArea.INSURANCE,
+            document_type="insurance_notice",
+            canonical_metadata={
+                "organization": {"name": "Generali Deutschland AG"},
+                "identifier": {"kind": "policy", "value": "VS-12345678"},
+            },
+            source="test",
+        )
+        document.extraction = DocumentExtraction(
+            provider="test",
+            provider_version="1",
+            method="native_pdf",
+            text="Die private Krankenversicherung erhält eine Anpassung des Beitrags.",
+            page_count=1,
+            pages=["Die private Krankenversicherung erhält eine Anpassung des Beitrags."],
+            content_hash="e" * 64,
+            warnings=[],
+            extraction_metadata={},
+        )
+        session.add(document)
+        await refresh_search_index(session, document, document.extraction)
+        await session.commit()
+        results, total = await search_documents(
+            session,
+            query="VS-12345678",
+            limit=10,
+            offset=0,
+            document_status=DocumentStatus.READY,
+            life_area=LifeArea.INSURANCE,
+            document_type="insurance_notice",
+            date_from=None,
+            date_to=None,
+        )
+        assert total == 1
+        assert results[0].document_id == document.id
+        assert "identifier" in results[0].matched_fields
+        await session.execute(text("SET LOCAL enable_seqscan = off"))
+        plan = await session.scalar(
+            text(
+                "EXPLAIN (FORMAT JSON) SELECT document_id FROM search_documents "
+                "WHERE search_vector @@ websearch_to_tsquery('german', 'Krankenversicherung')"
+            )
+        )
+        assert "ix_search_documents_vector" in str(plan)

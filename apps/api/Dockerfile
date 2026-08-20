@@ -10,7 +10,13 @@ RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked --no-dev --no-ins
 COPY pdi ./pdi
 COPY migrations ./migrations
 COPY alembic.ini ./
+COPY tests/fixtures/retrieval_corpus.json ./benchmark-corpus/retrieval.json
 RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked --no-dev
+
+FROM builder AS test
+RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked
+COPY tests ./tests
+CMD ["uv", "run", "pytest"]
 
 FROM python:3.13-slim-bookworm AS runtime
 ENV PATH="/opt/venv/bin:$PATH" PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
@@ -29,6 +35,7 @@ COPY --from=builder /opt/venv /opt/venv
 COPY --from=builder --chown=pdi:pdi /app/pdi ./pdi
 COPY --from=builder --chown=pdi:pdi /app/migrations ./migrations
 COPY --from=builder --chown=pdi:pdi /app/alembic.ini ./alembic.ini
+COPY --from=builder --chown=pdi:pdi /app/benchmark-corpus ./benchmark-corpus
 USER pdi
 EXPOSE 8000
 CMD ["sh", "-c", "alembic upgrade head && uvicorn pdi.main:app --host 0.0.0.0 --port 8000"]

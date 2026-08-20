@@ -1,0 +1,26 @@
+{
+  "documents": [
+    {"id":"generali_notice","title":"Generali – Beitragsanpassung PKV 2026","document_type":"insurance_notice","life_area":"insurance","document_date":"2026-08-01","organization":"Generali Deutschland AG","identifier":"VS-12345678","amount":{"amount":"492.39","currency":"EUR","source":"492,39 EUR"},"pages":["Generali Deutschland AG informiert über Ihre private Krankenversicherung.","Der monatliche Beitrag beträgt ab 01.08.2026 492,39 EUR. Die Beitragsanpassung gilt für den Tarif Komfort."]},
+    {"id":"auto_invoice","title":"Werkstattrechnung Auto 2026","document_type":"invoice","life_area":"vehicle","document_date":"2026-05-14","organization":"Autohaus Beispiel GmbH","identifier":"RE-2026-1234","amount":{"amount":"840.20","currency":"EUR","source":"840,20 EUR"},"pages":["Rechnung für Reparatur und Inspektion des Fahrzeugs.","Rechnungsnummer RE-2026-1234. Gesamtbetrag 840,20 EUR."]},
+    {"id":"tax_notice","title":"Einkommensteuerbescheid 2025","document_type":"tax_document","life_area":"tax","document_date":"2026-06-20","organization":"Finanzamt Berlin","identifier":"12/345/67890","pages":["Finanzamt Berlin – Steuerbescheid.","Der Einkommensteuerbescheid für 2025 setzt eine Nachzahlung fest."]},
+    {"id":"mobile_contract","title":"Mobilfunkvertrag und Kündigung","document_type":"contract","life_area":"personal","document_date":"2025-11-03","organization":"Telekom Beispiel GmbH","identifier":"V-778899","pages":["Vertrag für den Mobilfunktarif Privat.","Die Kündigung des Vertrags ist mit einer Frist von drei Monaten möglich."]},
+    {"id":"official_letter","title":"Schreiben der Zulassungsstelle","document_type":"official_letter","life_area":"vehicle","document_date":"2026-02-10","organization":"Landesamt für Bürgerdienste","identifier":"AZ-KFZ-2026-44","pages":["Amtliches Schreiben zur Fahrzeugzulassung.","Bitte reichen Sie den Versicherungsnachweis für das Fahrzeug ein."]},
+    {"id":"insurance_policy","title":"Private Krankenversicherung – Versicherungsschein","document_type":"insurance_policy","life_area":"insurance","document_date":"2024-01-01","organization":"Hanseatische Versicherung AG","identifier":"PKV-445566","pages":["Versicherungsschein für die private Krankenversicherung.","Versicherungsbeginn ist der 01.01.2024."]},
+    {"id":"purchase_receipt","title":"Kassenbon Elektronik","document_type":"receipt","life_area":"finance","document_date":"2026-03-08","organization":"Elektromarkt GmbH","identifier":"BON-3308","amount":{"amount":"129.99","currency":"EUR","source":"129,99 EUR"},"pages":["Kassenbon für Kopfhörer.","Gesamt 129,99 EUR, bezahlt mit Karte."]},
+    {"id":"employment_letter","title":"Gehaltsabrechnung Juli 2026","document_type":"employment_document","life_area":"work","document_date":"2026-07-31","organization":"Beispiel Arbeit GmbH","identifier":"PERS-1007","pages":["Gehaltsabrechnung für Juli 2026.","Personalnummer PERS-1007. Auszahlung zum Monatsende."]}
+  ],
+  "queries": [
+    {"query":"Generali","relevant":["generali_notice"],"top":"generali_notice","snippet":"Generali"},
+    {"query":"VS-12345678","relevant":["generali_notice"],"top":"generali_notice","exact_identifier":true},
+    {"query":"492,39 EUR","relevant":["generali_notice"],"top":"generali_notice","snippet":"492,39 EUR"},
+    {"query":"private Krankenversicherung Beitrag","relevant":["generali_notice"],"top":"generali_notice"},
+    {"query":"Krankenversicherung","relevant":["generali_notice","insurance_policy"]},
+    {"query":"Rechnung Auto","relevant":["auto_invoice"],"top":"auto_invoice"},
+    {"query":"RE-2026-1234","relevant":["auto_invoice"],"top":"auto_invoice","exact_identifier":true},
+    {"query":"Steuerbescheid","relevant":["tax_notice"],"top":"tax_notice"},
+    {"query":"Vertrag Kündigung","relevant":["mobile_contract"],"top":"mobile_contract"},
+    {"query":"Fahrzeug Versicherungsnachweis","relevant":["official_letter"],"top":"official_letter"},
+    {"query":"2026","relevant":["generali_notice"],"filters":{"life_area":"insurance","date_from":"2026-01-01","date_to":"2026-12-31"}},
+    {"query":"Rechnung","relevant":["auto_invoice"],"filters":{"document_type":"invoice","date_from":"2026-01-01","date_to":"2026-12-31"}}
+  ]
+}

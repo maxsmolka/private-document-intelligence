@@ -15,6 +15,7 @@ from pdi.ingestion.models import (
 from pdi.intelligence.providers import DeterministicIntelligenceProvider, DocumentContext
 from pdi.intelligence.schemas import IntelligenceResult
 from pdi.intelligence.service import run_intelligence
+from pdi.search.models import SearchDocument
 
 SAMPLE = """Nordstern Versicherung AG
 Versicherungsschein: POL-2026-991
@@ -145,6 +146,12 @@ async def test_accepting_field_proposal_updates_canonical_value_and_history(
     detail = await client.get(f"/api/v1/review/{document_id}")
     assert detail.json()["metadata_history"][0]["field_name"] == "life_area"
     assert detail.json()["metadata_history"][0]["source_proposal_id"] == str(proposal_id)
+    async with session_factory() as session:
+        indexed = await session.scalar(
+            select(SearchDocument).where(SearchDocument.document_id == document_id)
+        )
+        assert indexed is not None
+        assert "insurance" in indexed.metadata_text
 
 
 async def test_failed_reanalysis_preserves_last_successful_run(

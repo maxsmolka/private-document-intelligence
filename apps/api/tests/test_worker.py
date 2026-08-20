@@ -16,6 +16,7 @@ from pdi.ingestion.models import (
 )
 from pdi.ingestion.queue import claim_job, enqueue_document
 from pdi.ingestion.worker import process_job
+from pdi.search.models import SearchDocument
 from pdi.storage.local import LocalStorageBackend
 from tests.helpers import text_pdf
 
@@ -60,6 +61,12 @@ async def test_worker_processes_pdf_idempotently(
         extraction = await session.scalar(select(DocumentExtraction))
         assert extraction is not None
         assert "digital PDI document" in extraction.text
+        indexed = await session.scalar(
+            select(SearchDocument).where(SearchDocument.document_id == document.id)
+        )
+        assert indexed is not None
+        assert "digital PDI document" in indexed.body_text
+        assert indexed.extraction_content_hash == extraction.content_hash
         proposals = list((await session.scalars(select(MetadataProposal))).all())
         assert [proposal.field_name for proposal in proposals] == ["title"]
 
