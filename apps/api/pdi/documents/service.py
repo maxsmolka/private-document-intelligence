@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pdi.documents.models import Document, DocumentStatus, LifeArea
+from pdi.ingestion.queue import enqueue_document
 from pdi.storage.base import StorageBackend
 
 logger = logging.getLogger("pdi.documents")
@@ -46,6 +47,7 @@ async def create_document(
     storage: StorageBackend,
     file: UploadFile,
     max_size: int,
+    max_attempts: int,
 ) -> Document:
     filename, mime_type = await validate_upload(file)
     storage_key = f"{uuid.uuid4()}{EXTENSIONS[mime_type]}"
@@ -57,12 +59,13 @@ async def create_document(
         file_size=stored.size,
         sha256=stored.sha256,
         storage_key=stored.key,
-        status=DocumentStatus.READY,
+        status=DocumentStatus.INBOX,
         life_area=LifeArea.OTHER,
         source="upload",
     )
     try:
         session.add(document)
+        await enqueue_document(session, document, max_attempts)
         await session.commit()
         await session.refresh(document)
     except BaseException:

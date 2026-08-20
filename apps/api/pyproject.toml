@@ -8,10 +8,16 @@ dependencies = [
   "asyncpg>=0.30,<1",
   "fastapi>=0.115,<1",
   "pydantic-settings>=2.8,<3",
+  "pypdf>=6.0,<7",
   "python-multipart>=0.0.20,<1",
   "sqlalchemy[asyncio]>=2.0.38,<3",
   "uvicorn[standard]>=0.34,<1",
 ]
+
+[project.scripts]
+pdi = "pdi.cli:main"
+pdi-worker = "pdi.ingestion.worker:main"
+pdi-benchmark-ocr = "pdi.ingestion.benchmark:main"
 
 [dependency-groups]
 dev = [
@@ -46,4 +52,3 @@ python_version = "3.13"
 strict = true
 plugins = ["pydantic.mypy"]
 files = ["pdi", "tests"]
-

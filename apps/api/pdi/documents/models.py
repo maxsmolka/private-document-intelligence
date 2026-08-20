@@ -3,7 +3,7 @@ from datetime import date, datetime
 from enum import StrEnum
 
 from sqlalchemy import BigInteger, Date, DateTime, Enum, Index, String, Uuid, func
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
@@ -65,3 +65,15 @@ class Document(Base):
     )
     document_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
     source: Mapped[str] = mapped_column(String(100), default="upload")
+    ingestion_jobs: Mapped[list["IngestionJob"]] = relationship(
+        back_populates="document", cascade="all, delete-orphan"
+    )
+    extraction: Mapped["DocumentExtraction | None"] = relationship(
+        back_populates="document", cascade="all, delete-orphan", uselist=False
+    )
+    metadata_proposals: Mapped[list["MetadataProposal"]] = relationship(
+        back_populates="document", cascade="all, delete-orphan"
+    )
+
+
+from pdi.ingestion.models import DocumentExtraction, IngestionJob, MetadataProposal  # noqa: E402

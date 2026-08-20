@@ -12,7 +12,15 @@ class JsonFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
         }
-        for key in ("request_id", "document_id", "operation", "duration_ms"):
+        for key in (
+            "request_id",
+            "document_id",
+            "job_id",
+            "worker_id",
+            "operation",
+            "duration_ms",
+            "persistence_ms",
+        ):
             value = getattr(record, key, None)
             if value is not None:
                 payload[key] = value
