@@ -1,0 +1,66 @@
+name: pdi
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: pdi
+      POSTGRES_USER: pdi
+      POSTGRES_PASSWORD: pdi
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pdi -d pdi"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./apps/api
+    environment:
+      PDI_ENV: development
+      PDI_DATABASE_URL: postgresql+asyncpg://pdi:pdi@postgres:5432/pdi
+      PDI_STORAGE_PATH: /data/documents
+      PDI_MAX_UPLOAD_SIZE: 26214400
+      PDI_LOG_LEVEL: INFO
+      PDI_CORS_ORIGINS: '["http://localhost:3000"]'
+    volumes:
+      - document_storage:/data/documents
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./apps/web
+      args:
+        NEXT_PUBLIC_PDI_API_URL: http://localhost:8000
+    environment:
+      PDI_API_INTERNAL_URL: http://api:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/documents"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  document_storage:
