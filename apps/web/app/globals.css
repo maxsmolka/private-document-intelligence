@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+:root { color-scheme: light; }
+
+* { box-sizing: border-box; }
+
+html { background: #fbfaf7; }
+
+body {
+  margin: 0;
+  background: #fbfaf7;
+  color: #292524;
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input, select { font: inherit; }
+
+::selection { background: #e7e2d8; color: #1c1917; }
+
+@keyframes shimmer { 100% { transform: translateX(100%); } }
