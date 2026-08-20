@@ -50,6 +50,7 @@ class IntelligenceRunStatus(StrEnum):
 class DocumentAssetKind(StrEnum):
     ORIGINAL = "original"
     OCR_PDF = "ocr_pdf"
+    MIGRATED_ARCHIVE = "migrated_archive"
 
 
 class DocumentAsset(Base):

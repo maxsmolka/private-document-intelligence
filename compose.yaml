@@ -21,6 +21,9 @@ x-backend-environment: &backend-environment
   PDI_INTELLIGENCE_PROVIDER: deterministic
   PDI_INTELLIGENCE_TIMEOUT_SECONDS: 60
   PDI_INTELLIGENCE_MAX_INPUT_CHARACTERS: 100000
+  PDI_AUTH_ENABLED: "true"
+  PDI_AUTH_SECURE_COOKIES: "false"
+  PDI_SESSION_TTL_SECONDS: 43200
 
 services:
   postgres:
@@ -47,6 +50,7 @@ services:
       PDI_CORS_ORIGINS: '["http://localhost:3000"]'
     volumes:
       - document_storage:/data/documents
+      - backup_data:/backups
     ports:
       - "8000:8000"
     depends_on:
@@ -89,6 +93,7 @@ services:
         NEXT_PUBLIC_PDI_API_URL: http://localhost:8000
     environment:
       PDI_API_INTERNAL_URL: http://api:8000
+      PDI_AUTH_ENABLED: "true"
     ports:
       - "3000:3000"
     depends_on:
@@ -102,6 +107,52 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  consume:
+    profiles: ["consume"]
+    image: pdi-backend:local
+    command: ["pdi-consume"]
+    environment:
+      <<: *backend-environment
+      PDI_CONSUME_PATH: /consume
+      PDI_CONSUME_PROCESSED_PATH: /consume-processed
+      PDI_CONSUME_FAILED_PATH: /consume-failed
+    volumes:
+      - document_storage:/data/documents
+      - consume_inbox:/consume
+      - consume_processed:/consume-processed
+      - consume_failed:/consume-failed
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  mail:
+    profiles: ["mail"]
+    image: pdi-backend:local
+    command: ["pdi-mail"]
+    environment:
+      <<: *backend-environment
+      PDI_MAIL_ENABLED: "true"
+      PDI_IMAP_HOST: ${PDI_IMAP_HOST:-}
+      PDI_IMAP_USER: ${PDI_IMAP_USER:-}
+      PDI_IMAP_PASSWORD_FILE: /run/secrets/imap_password
+      PDI_IMAP_MAILBOX: ${PDI_IMAP_MAILBOX:-INBOX}
+    volumes:
+      - document_storage:/data/documents
+      - ${PDI_IMAP_PASSWORD_FILE:-./secrets/imap_password.example}:/run/secrets/imap_password:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   document_storage:
+  backup_data:
+  consume_inbox:
+  consume_processed:
+  consume_failed:

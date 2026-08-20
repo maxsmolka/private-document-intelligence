@@ -1,4 +1,4 @@
-.PHONY: dev up down logs test lint format migrate worker reconcile benchmark-ocr benchmark-intelligence benchmark-retrieval benchmark-knowledge rebuild-search
+.PHONY: dev up down logs test lint format migrate worker reconcile benchmark-ocr benchmark-intelligence benchmark-retrieval benchmark-knowledge benchmark-operations rebuild-search readiness backup backup-verify export
 
 dev:
 	docker compose up --build
@@ -45,5 +45,20 @@ benchmark-retrieval:
 benchmark-knowledge:
 	docker compose exec -T api pdi-benchmark-knowledge benchmark-corpus/knowledge.json
 
+benchmark-operations:
+	docker compose exec -T api pdi-benchmark-operations
+
 rebuild-search:
 	docker compose exec -T api pdi search rebuild
+
+readiness:
+	docker compose exec -T api pdi readiness
+
+backup:
+	docker compose exec -T api pdi backup create /backups/manual
+
+backup-verify:
+	docker compose exec -T api pdi backup verify /backups/manual
+
+export:
+	docker compose exec -T api pdi export /backups/export

@@ -33,6 +33,27 @@ class Settings(BaseSettings):
     intelligence_max_input_characters: int = Field(default=100_000, ge=1_000)
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5:7b"
+    auth_enabled: bool = False
+    session_ttl_seconds: int = Field(default=43_200, ge=300, le=2_592_000)
+    auth_secure_cookies: bool = False
+    login_max_attempts: int = Field(default=5, ge=1, le=50)
+    login_window_seconds: int = Field(default=900, ge=60, le=86_400)
+    consume_path: Path = Path("./consume")
+    consume_processed_path: Path = Path("./consume-processed")
+    consume_failed_path: Path = Path("./consume-failed")
+    consume_stability_seconds: int = Field(default=10, ge=1, le=3600)
+    consume_poll_interval: float = Field(default=2, gt=0, le=300)
+    mail_enabled: bool = False
+    imap_host: str | None = None
+    imap_port: int = Field(default=993, ge=1, le=65535)
+    imap_user: str | None = None
+    imap_password_file: Path | None = None
+    imap_mailbox: str = "INBOX"
+    mail_poll_interval: float = Field(default=60, ge=5, le=3600)
+    paperless_url: str | None = None
+    paperless_token_file: Path | None = None
+    paperless_verify_tls: bool = True
+    backup_path: Path = Path("./backups")
 
 
 @lru_cache

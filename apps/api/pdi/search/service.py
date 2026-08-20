@@ -31,6 +31,7 @@ SEARCHABLE_CANONICAL_FIELDS = {
     "due_date",
     "effective_date",
     "other_date",
+    "tags",
 }
 
 

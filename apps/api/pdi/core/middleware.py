@@ -20,6 +20,10 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         response.headers["x-content-type-options"] = "nosniff"
         response.headers["x-frame-options"] = "SAMEORIGIN"
         response.headers["referrer-policy"] = "no-referrer"
+        response.headers["content-security-policy"] = (
+            "default-src 'none'; frame-ancestors 'self'; base-uri 'none'; form-action 'self'"
+        )
+        response.headers["permissions-policy"] = "camera=(), microphone=(), geolocation=()"
         logger.info(
             "request_completed",
             extra={

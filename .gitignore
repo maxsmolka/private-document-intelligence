@@ -21,3 +21,5 @@ retrieval-results.json
 *.sqlite*
 .DS_Store
 Thumbs.db
+/secrets/*
+!/secrets/*.example

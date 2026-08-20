@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from pdi.core.config import get_settings
 from pdi.documents.models import Base
 from pdi.knowledge import models as knowledge_models  # noqa: F401
+from pdi.operations import models as operations_models  # noqa: F401
 from pdi.search import models as search_models  # noqa: F401
 
 config = context.config

@@ -1,6 +1,9 @@
 import logging
+import mimetypes
 import uuid
+from datetime import date
 from pathlib import Path
+from typing import Any
 
 from fastapi import HTTPException, UploadFile, status
 from sqlalchemy import func, select
@@ -54,43 +57,134 @@ async def create_document(
     filename, mime_type = await validate_upload(file)
     storage_key = f"{uuid.uuid4()}{EXTENSIONS[mime_type]}"
     stored = await storage.store(storage_key, file, max_size)
+    return await persist_stored_document(
+        session,
+        storage,
+        stored_key=stored.key,
+        stored_size=stored.size,
+        stored_sha256=stored.sha256,
+        filename=filename,
+        mime_type=mime_type,
+        max_attempts=max_attempts,
+        source="upload",
+        enqueue=True,
+    )
+
+
+async def persist_stored_document(
+    session: AsyncSession,
+    storage: StorageBackend,
+    *,
+    stored_key: str,
+    stored_size: int,
+    stored_sha256: str,
+    filename: str,
+    mime_type: str,
+    max_attempts: int,
+    source: str,
+    enqueue: bool,
+    document_date: date | None = None,
+    document_type: str | None = None,
+    canonical_metadata: dict[str, Any] | None = None,
+) -> Document:
     document = Document(
         title=Path(filename).stem[:255] or "Untitled document",
         original_filename=filename,
         mime_type=mime_type,
-        file_size=stored.size,
-        sha256=stored.sha256,
-        storage_key=stored.key,
+        file_size=stored_size,
+        sha256=stored_sha256,
+        storage_key=stored_key,
         status=DocumentStatus.INBOX,
         life_area=LifeArea.OTHER,
-        source="upload",
+        source=source,
+        document_date=document_date,
+        document_type=document_type,
+        canonical_metadata=canonical_metadata or {},
     )
     document.assets.append(
         DocumentAsset(
             kind=DocumentAssetKind.ORIGINAL,
-            storage_key=stored.key,
+            storage_key=stored_key,
             mime_type=mime_type,
-            file_size=stored.size,
-            sha256=stored.sha256,
-            provider="upload",
+            file_size=stored_size,
+            sha256=stored_sha256,
+            provider=source,
             provider_version="1",
         )
     )
     try:
         session.add(document)
-        await enqueue_document(session, document, max_attempts)
+        if enqueue:
+            await enqueue_document(session, document, max_attempts)
+        else:
+            document.status = DocumentStatus.READY
         await refresh_search_index(session, document)
         await session.commit()
         await session.refresh(document)
     except BaseException:
         await session.rollback()
-        await storage.delete(storage_key)
+        await storage.delete(stored_key)
         raise
     logger.info(
         "document_uploaded",
-        extra={"document_id": str(document.id), "operation": "upload"},
+        extra={"document_id": str(document.id), "operation": "ingest", "source": source},
     )
     return document
+
+
+def detect_path_type(path: Path) -> str:
+    header = path.read_bytes()[:16]
+    for mime_type, signatures in SUPPORTED_SIGNATURES.items():
+        if any(header.startswith(signature) for signature in signatures):
+            return mime_type
+    guessed = mimetypes.guess_type(path.name)[0]
+    if guessed in SUPPORTED_SIGNATURES:
+        raise ValueError("File extension matches a supported type but its signature does not")
+    raise ValueError("Only PDF, JPEG, and PNG files are supported")
+
+
+async def ingest_path(
+    session: AsyncSession,
+    storage: StorageBackend,
+    path: Path,
+    *,
+    max_size: int,
+    max_attempts: int,
+    source: str,
+    enqueue: bool = True,
+    deduplicate: bool = True,
+    document_date: date | None = None,
+    document_type: str | None = None,
+    canonical_metadata: dict[str, Any] | None = None,
+) -> tuple[Document, bool]:
+    mime_type = detect_path_type(path)
+    key = f"{uuid.uuid4()}{EXTENSIONS[mime_type]}"
+    stored = await storage.store_path(key, path, max_size)
+    if deduplicate:
+        existing = await session.scalar(
+            select(Document).where(Document.sha256 == stored.sha256).order_by(Document.created_at)
+        )
+        if existing is not None:
+            await storage.delete(stored.key)
+            return existing, True
+    return (
+        await persist_stored_document(
+            session,
+            storage,
+            stored_key=stored.key,
+            stored_size=stored.size,
+            stored_sha256=stored.sha256,
+            filename=safe_filename(path.name),
+            mime_type=mime_type,
+            max_attempts=max_attempts,
+            source=source,
+            enqueue=enqueue,
+            document_date=document_date,
+            document_type=document_type,
+            canonical_metadata=canonical_metadata,
+        ),
+        False,
+    )
 
 
 async def list_documents(

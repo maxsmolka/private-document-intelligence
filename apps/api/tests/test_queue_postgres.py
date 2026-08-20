@@ -1,32 +1,14 @@
 import asyncio
-import os
-from collections.abc import AsyncIterator
 from datetime import date
 
-import pytest
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from pdi.documents.models import Base, Document, DocumentStatus, LifeArea
+from pdi.documents.models import Document, DocumentStatus, LifeArea
 from pdi.ingestion.models import DocumentExtraction, IngestionJob
 from pdi.ingestion.queue import claim_job, enqueue_document
 from pdi.knowledge.models import DatePrecision, EventType, Organization, TimelineEvent
 from pdi.search.service import refresh_search_index, search_documents
-
-
-@pytest.fixture
-async def postgres_factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
-    url = os.getenv("PDI_TEST_POSTGRES_URL")
-    if not url:
-        pytest.skip("PDI_TEST_POSTGRES_URL is not configured")
-    engine = create_async_engine(url)
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.drop_all)
-        await connection.run_sync(Base.metadata.create_all)
-    yield async_sessionmaker(engine, expire_on_commit=False)
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.drop_all)
-    await engine.dispose()
 
 
 async def test_concurrent_postgres_claims_are_distinct(

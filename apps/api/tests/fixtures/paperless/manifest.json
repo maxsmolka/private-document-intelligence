@@ -1,0 +1,57 @@
+{
+  "version": "2.18.4",
+  "catalogs": {
+    "correspondents": [
+      {"id": 1, "name": "Generali Deutschland AG"},
+      {"id": 2, "name": "Stadtwerke Berlin GmbH"}
+    ],
+    "document_types": [
+      {"id": 1, "name": "Insurance Policy"},
+      {"id": 2, "name": "Invoice"}
+    ],
+    "tags": [
+      {"id": 1, "name": "important", "color": "#d97706"},
+      {"id": 2, "name": "utilities", "color": "#2563eb"}
+    ],
+    "custom_fields": [{"id": 1, "name": "Policy Number", "data_type": "string"}]
+  },
+  "documents": [
+    {
+      "id": 101,
+      "title": "Generali Policy",
+      "created": "2025-06-01",
+      "added": "2026-01-02T09:00:00Z",
+      "modified": "2026-02-01T12:00:00Z",
+      "correspondent": 1,
+      "document_type": 1,
+      "tags": [1],
+      "custom_fields": [{"field": 1, "value": "VS-12345678"}],
+      "notes": [{"id": 88, "note": "Imported policy note"}],
+      "archive_serial_number": 42,
+      "owner": 7,
+      "permissions": {"view": [7], "change": [7]},
+      "storage_path": 3,
+      "workflow_state": "completed",
+      "original_file": "policy.pdf",
+      "original_file_name": "Generali Policy.pdf"
+    },
+    {
+      "id": 102,
+      "title": "Utility Invoice Scan",
+      "created": "2026-07-15",
+      "added": "2026-07-16T08:30:00Z",
+      "correspondent": 2,
+      "document_type": 2,
+      "tags": [2],
+      "custom_fields": [],
+      "notes": [],
+      "archive_serial_number": 43,
+      "owner": 7,
+      "permissions": {"view": [7]},
+      "original_file": "scan.pdf",
+      "original_file_name": "Utility Scan.pdf",
+      "archived_file": "scan-archive.pdf",
+      "archived_file_name": "Utility Scan archive.pdf"
+    }
+  ]
+}
