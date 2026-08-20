@@ -2,7 +2,7 @@
 
 ## Deployment posture
 
-PDI Milestone 2.1 has no authentication or authorization and must not be exposed directly to the public internet. Use a trusted private network, VPN, or authenticated reverse proxy. Replace the example database password, terminate TLS, restrict database/API ports, and back up PostgreSQL and document storage together.
+PDI has local authentication but is still intended for a private network or VPN, not direct public-Internet exposure. Replace example credentials, terminate TLS at a trusted reverse proxy, enable secure cookies, restrict database/API ports, and back up PostgreSQL and document storage together.
 
 ## Current safeguards
 
@@ -23,6 +23,10 @@ PDI Milestone 2.1 has no authentication or authorization and must not be exposed
 - reconciliation is dry-run by default and cleanup never deletes recoverable originals or missing database records
 - search uses bound parameters, human-safe `websearch_to_tsquery`, a 200-character query cap, and bounded result/snippet sizes
 - highlight ranges describe exact persisted strings; the API never emits generated search HTML
+- Argon2id passwords, rate-limited login, digest-only revocable sessions and API tokens
+- SameSite browser cookies, HttpOnly session storage, and CSRF validation for unsafe requests
+- read-only secret files for IMAP and Paperless; no secret values in manifests, logs, exports, or Compose
+- checksummed backup inventories, path containment, corruption refusal, and non-empty restore refusal
 
 ## Malformed documents and resource exhaustion
 
@@ -30,7 +34,7 @@ PyPDF runs inside the bounded worker job but is still a parser for untrusted inp
 
 OCRmyPDF, Ghostscript, qpdf, image codecs, and Tesseract parse hostile native formats. PDI bounds time, pages, image dimensions, output size, attempts, and concurrency, but does not provide a perfect native-code sandbox or hard memory/disk quota. Keep the image patched and apply container CPU/memory/PID limits appropriate to the host. A decompression bomb may consume resources before every application limit can intervene; temporary disk exhaustion and kernel OOM termination remain residual risks. Never construct subprocess arguments from original filenames, use `shell=True`, or expose arbitrary OCR flags through document metadata.
 
-PDI does not currently provide antivirus scanning, PDF sanitization, per-user quotas, application-layer encryption, sandbox namespaces, or authentication. Browser PDF viewers also process untrusted input and must remain patched.
+PDI does not currently provide antivirus scanning, PDF sanitization, per-user quotas, application-layer encryption, sandbox namespaces, SSO, MFA, or per-document RBAC. Browser PDF viewers also process untrusted input and must remain patched.
 
 ## Data and provider privacy
 
@@ -39,5 +43,13 @@ Originals, OCR text, metadata proposals, and review history are sensitive. Deter
 Search queries and snippets remain inside the API, PostgreSQL, and browser session. Query text is passed only as a bound value and is not written to structured logs; logs record only whether a query existed, duration, and result count. PDI does not support wildcards or raw `tsquery` syntax. Offset, limit, and filters are validated before SQL execution. Semantic retrieval and remote embeddings are disabled because they were not justified by the M4 benchmark, so search introduces no external content or query transfer.
 
 Knowledge records can expose sensitive organizations, identifiers, obligations, and life events even without opening the source document. Their APIs have the same unauthenticated private-network posture as documents. Evidence remains bounded and document-backed; relative deadlines are not converted to exact dates without sufficient context, and no action sends a notification or modifies an external calendar. Merge and status mutations use typed UUID targets and controlled states, while database foreign keys and append-only history reduce accidental loss. Authentication and per-user authorization remain required before any multi-user or public deployment.
+
+## Milestone 6 threat boundaries
+
+Session theft remains possible on a compromised browser/host; TLS, secure cookies, short TTLs, logout, and account disable reduce but do not eliminate it. API bearer tokens must be treated as passwords and scoped minimally. Imported Paperless owners/permissions are preservation metadata, not authorization. A compromised Paperless server can return malicious files or metadata; validation and hashing do not make content safe. Consume-folder writers can submit hostile files. IMAP and migration token files, backups, and exports are plaintext secrets/data at rest and need host-level permissions and off-host encryption where appropriate.
+
+Backup verification proves manifest/dump consistency, not benevolent content: restoring a malicious but internally valid backup can reintroduce hostile documents or canonical data. Restore only from trusted custody. Prompt injection remains relevant wherever untrusted document text reaches optional intelligence providers or future Atlas; PDI treats document text as data and never grants it operational authority.
+
+Security headers include CSP, frame denial, MIME sniffing denial, referrer and permissions policies. HSTS belongs at the HTTPS reverse proxy so local HTTP development is not broken.
 
 Report vulnerabilities privately to maintainers without attaching sensitive documents to public issues.

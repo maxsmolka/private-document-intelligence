@@ -6,7 +6,7 @@ PDI is the authoritative, local-first system of record for documents, originals,
 
 Atlas Personal Intelligence is a future API consumer. Atlas may reason over PDI data and retain derived reasoning, but it must never read PDI's PostgreSQL database or storage volume. PDI-derived facts remain authoritative in PDI.
 
-Authentication, semantic search, embeddings, Atlas integration, Paperless import, notifications, and external ingestion are not part of Milestone 5.
+Semantic search, embeddings, Atlas implementation, notifications, and chat remain outside PDI. Milestone 6 adds authentication, read-only Paperless migration, external ingestion, coordinated recovery, open export, and operational readiness.
 
 ## System context
 
@@ -18,10 +18,13 @@ flowchart LR
     A --> S[("Document storage")]
     Q["Ingestion worker"] --> P
     Q --> S
-    X["Future Atlas"] -. "versioned API only" .-> A
+    C["Consume / IMAP / Paperless"] --> A
+    X["Future Atlas"] -. "scoped versioned API only" .-> A
 ```
 
 The API and worker use one immutable Python image with separate entrypoints. The API applies Alembic migrations before becoming healthy; the worker waits for API health during Compose startup, then operates independently.
+
+Browser users authenticate with local database sessions and CSRF protection. Machine callers use digest-only scoped tokens. All upload, consume, mail, and migration entrypoints converge on shared file validation, storage, deduplication, and persistence; only ordinary new ingestion enters the existing extraction queue. Backup/restore coordinates PostgreSQL and storage through a transparent checksummed format. See ADRs 0006–0009.
 
 ## Ingestion lifecycle
 

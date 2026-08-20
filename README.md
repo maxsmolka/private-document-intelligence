@@ -1,6 +1,6 @@
 # PDI — Private Document Intelligence
 
-PDI is a fast, privacy-first document system designed for self-hosting on modest hardware. Milestone 5 adds a review-first, document-backed knowledge and life model in PostgreSQL.
+PDI is a privacy-first, local document system designed for self-hosting on modest hardware. Milestone 6 adds the production controls needed to replace an actively used Paperless-ngx installation safely.
 
 ## What works
 
@@ -29,6 +29,11 @@ PDI is a fast, privacy-first document system designed for self-hosting on modest
 - Knowledge review with create, edit, link, reject, provenance, confidence, and evidence
 - Timeline and upcoming workspaces plus auditable deadline/action status changes
 - Dry-run storage reconciliation for orphan, missing, and stale temporary files
+- Resumable, idempotent Paperless API migration with analyze, dry-run, import, and verification reports
+- Watched consume-folder and IMAP attachment ingestion through the same durable ingestion service
+- Argon2id local accounts, revocable database sessions, CSRF protection, and hashed scoped API tokens
+- Checksummed PostgreSQL-plus-storage backups, verified fresh restores, and open JSON/original exports
+- Operational readiness reporting and a reversible Paperless cutover runbook
 
 ## Run with Docker
 
@@ -38,6 +43,7 @@ Requirements: Docker Engine with Docker Compose v2.
 git clone <your-repository-url> pdi
 cd pdi
 docker compose up --build
+docker compose run --rm api pdi user create admin
 ```
 
 Open [http://localhost:3000](http://localhost:3000). The API is available at [http://localhost:8000](http://localhost:8000), with interactive docs at `/docs`.
@@ -105,7 +111,7 @@ cd ../..
 docker compose config
 ```
 
-Or use `make test`, `make lint`, `make format`, `make migrate`, `make worker`, `make reconcile`, `make rebuild-search`, `make benchmark-ocr`, `make benchmark-intelligence`, `make benchmark-retrieval`, `make benchmark-knowledge`, `make logs`, `make up`, and `make down` on systems with Make installed.
+Or use the Make targets, including `readiness`, `backup`, `backup-verify`, `export`, and `benchmark-operations`.
 
 ## API
 
@@ -147,4 +153,4 @@ compose.yaml    Complete local deployment
 
 Empty `packages` and `infra` directories are intentionally omitted until a concrete shared package or infrastructure override is needed.
 
-See [Architecture](docs/ARCHITECTURE.md), [Ingestion](docs/INGESTION.md), [Document intelligence](docs/INTELLIGENCE.md), [Retrieval](docs/RETRIEVAL.md), [Document knowledge](docs/KNOWLEDGE.md), [Knowledge benchmark](docs/KNOWLEDGE_BENCHMARK.md), [Security](docs/SECURITY.md), [Paperless migration](docs/PAPERLESS_MIGRATION.md), and [Atlas integration](docs/ATLAS_INTEGRATION.md). PDI is released under the [MIT License](LICENSE).
+Start with [Operations](docs/OPERATIONS.md), [Authentication](docs/AUTHENTICATION.md), [Paperless migration](docs/PAPERLESS_MIGRATION.md), [Backup and restore](docs/BACKUP_RESTORE.md), and [Cutover](docs/CUTOVER.md). Architecture, security, ingestion-source, export, benchmark, and Atlas-boundary documents are in `docs/`. PDI is released under the [MIT License](LICENSE).
