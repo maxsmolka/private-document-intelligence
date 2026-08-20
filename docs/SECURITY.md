@@ -14,6 +14,8 @@ PDI Milestone 2.1 has no authentication or authorization and must not be exposed
 - no document contents, extracted text, filenames, or proposal values in structured logs
 - request IDs plus job/document IDs without sensitive payloads
 - machine proposals cannot silently overwrite canonical metadata
+- knowledge proposals require verified persisted-text evidence and explicit review before canonical creation or linking
+- similar organization names never trigger an automatic merge; explicit merges retain aliases, references, and audit history
 - bounded worker attempts, polling, concurrency, job timeouts, and stale-claim recovery
 - OCR subprocesses use explicit arguments, no shell, private temporary paths, captured output, cancellation cleanup, and a hard timeout
 - OCR is capped at 100 pages, 100 megapixels per page, 100 MiB derived output, one subprocess job, and one worker by default
@@ -35,5 +37,7 @@ PDI does not currently provide antivirus scanning, PDF sanitization, per-user qu
 Originals, OCR text, metadata proposals, and review history are sensitive. Deterministic providers run locally and make no outbound calls. Ollama is optional and must be explicitly enabled on a trusted local endpoint. Document text is untrusted data, never instructions: structured output rejects unknown keys and taxonomy values, input is bounded, exact persisted-text evidence is mandatory, and provider errors are sanitized. No provider can write canonical metadata directly. A future external provider must remain explicit opt-in, minimize transmitted data, and record provenance.
 
 Search queries and snippets remain inside the API, PostgreSQL, and browser session. Query text is passed only as a bound value and is not written to structured logs; logs record only whether a query existed, duration, and result count. PDI does not support wildcards or raw `tsquery` syntax. Offset, limit, and filters are validated before SQL execution. Semantic retrieval and remote embeddings are disabled because they were not justified by the M4 benchmark, so search introduces no external content or query transfer.
+
+Knowledge records can expose sensitive organizations, identifiers, obligations, and life events even without opening the source document. Their APIs have the same unauthenticated private-network posture as documents. Evidence remains bounded and document-backed; relative deadlines are not converted to exact dates without sufficient context, and no action sends a notification or modifies an external calendar. Merge and status mutations use typed UUID targets and controlled states, while database foreign keys and append-only history reduce accidental loss. Authentication and per-user authorization remain required before any multi-user or public deployment.
 
 Report vulnerabilities privately to maintainers without attaching sensitive documents to public issues.

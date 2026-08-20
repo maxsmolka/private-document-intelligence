@@ -1,5 +1,7 @@
 # Paperless-ngx migration compatibility
 
+Imported Paperless correspondents, tags, custom fields, and dates must first become document metadata or evidence-backed knowledge proposals. A correspondent name is not permission to create or merge a canonical organization automatically; exact aliases may be suggested for review. Paperless created/added dates must not be treated as document events or legal deadlines without supporting document evidence.
+
 The eventual importer will preserve originals, metadata, dates, useful source identifiers, and provenance. Unsupported values will be retained in an import record or reported—never silently discarded. PDI targets migration compatibility, not Paperless schema compatibility.
 
 | Paperless concept | Planned PDI mapping | Current gap |
@@ -20,4 +22,3 @@ The eventual importer will preserve originals, metadata, dates, useful source id
 | Archived File | Derived rendition linked to original | Not representable yet |
 
 Import should be staged and resumable: inventory export, verify checksums, copy originals, persist source IDs/raw unsupported metadata, import canonical mappings, schedule extraction only when needed, and produce a reconciliation report. PDI will not overwrite a preserved Paperless original with an archived/OCR rendition.
-

@@ -1,6 +1,6 @@
 # PDI — Private Document Intelligence
 
-PDI is a fast, privacy-first document system designed for self-hosting on modest hardware. Milestone 4 adds fast, grounded PostgreSQL retrieval without a separate search service or external AI.
+PDI is a fast, privacy-first document system designed for self-hosting on modest hardware. Milestone 5 adds a review-first, document-backed knowledge and life model in PostgreSQL.
 
 ## What works
 
@@ -23,6 +23,11 @@ PDI is a fast, privacy-first document system designed for self-hosting on modest
 - Exact identifier ranking, filters, deterministic pagination, and page-grounded snippets
 - Dedicated keyboard-friendly search workspace plus global Cmd/Ctrl+K and `/` focus
 - Idempotent search verification/rebuild tooling and reproducible quality/scale benchmarks
+- Reviewable organizations and aliases with conservative exact-match resolution and explicit merges
+- Contracts with lifecycle dates, organizations, identifiers, and multiple source documents
+- Grounded document relationships, timeline events, deadlines, and actionable obligations
+- Knowledge review with create, edit, link, reject, provenance, confidence, and evidence
+- Timeline and upcoming workspaces plus auditable deadline/action status changes
 - Dry-run storage reconciliation for orphan, missing, and stale temporary files
 
 ## Run with Docker
@@ -100,7 +105,7 @@ cd ../..
 docker compose config
 ```
 
-Or use `make test`, `make lint`, `make format`, `make migrate`, `make worker`, `make reconcile`, `make rebuild-search`, `make benchmark-ocr`, `make benchmark-intelligence`, `make benchmark-retrieval`, `make logs`, `make up`, and `make down` on systems with Make installed.
+Or use `make test`, `make lint`, `make format`, `make migrate`, `make worker`, `make reconcile`, `make rebuild-search`, `make benchmark-ocr`, `make benchmark-intelligence`, `make benchmark-retrieval`, `make benchmark-knowledge`, `make logs`, `make up`, and `make down` on systems with Make installed.
 
 ## API
 
@@ -123,6 +128,11 @@ Or use `make test`, `make lint`, `make format`, `make migrate`, `make worker`, `
 | `POST` | `/api/v1/review/{id}/reject` | Reject pending machine proposals |
 | `POST` | `/api/v1/review/{id}/proposals/{proposal_id}/accept` | Accept or edit one grounded proposal |
 | `POST` | `/api/v1/review/{id}/proposals/{proposal_id}/reject` | Reject one grounded proposal |
+| `GET` | `/api/v1/organizations`, `/contracts`, `/timeline` | Browse canonical knowledge and time |
+| `GET` | `/api/v1/deadlines`, `/action-items`, `/relationships` | Browse upcoming work and document links |
+| `GET` | `/api/v1/knowledge/review` | List pending grounded knowledge proposals |
+| `POST` | `/api/v1/knowledge/review/{id}/accept` | Create, edit, or link a proposed record |
+| `POST` | `/api/v1/knowledge/review/{id}/reject` | Reject a proposed record |
 
 ## Repository map
 
@@ -137,4 +147,4 @@ compose.yaml    Complete local deployment
 
 Empty `packages` and `infra` directories are intentionally omitted until a concrete shared package or infrastructure override is needed.
 
-See [Architecture](docs/ARCHITECTURE.md), [Ingestion](docs/INGESTION.md), [Document intelligence](docs/INTELLIGENCE.md), [Retrieval](docs/RETRIEVAL.md), [Retrieval benchmark](docs/RETRIEVAL_BENCHMARK.md), [Security](docs/SECURITY.md), [Paperless migration](docs/PAPERLESS_MIGRATION.md), and [Atlas integration](docs/ATLAS_INTEGRATION.md). PDI is released under the [MIT License](LICENSE).
+See [Architecture](docs/ARCHITECTURE.md), [Ingestion](docs/INGESTION.md), [Document intelligence](docs/INTELLIGENCE.md), [Retrieval](docs/RETRIEVAL.md), [Document knowledge](docs/KNOWLEDGE.md), [Knowledge benchmark](docs/KNOWLEDGE_BENCHMARK.md), [Security](docs/SECURITY.md), [Paperless migration](docs/PAPERLESS_MIGRATION.md), and [Atlas integration](docs/ATLAS_INTEGRATION.md). PDI is released under the [MIT License](LICENSE).

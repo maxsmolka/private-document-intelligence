@@ -1,5 +1,7 @@
 # Atlas integration boundary
 
+The Milestone 5 organizations, contracts, timeline, deadlines, actions, and relationships are future Atlas inputs only through the versioned `/api/v1` HTTP resources. Atlas must not read or mutate PDI tables directly. Provenance and opaque PDI IDs allow a later consumer to cite the authoritative document while keeping its own derived reasoning separate.
+
 PDI owns documents, originals, storage, ingestion, extracted text, metadata proposals, confirmed metadata, review status, search, and lifecycle. Atlas owns higher-level reasoning, planning, agents, and cross-domain derived intelligence.
 
 Rules:

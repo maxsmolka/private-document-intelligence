@@ -1,5 +1,7 @@
 # Document intelligence
 
+Accepted Milestone 3 metadata remains document-scoped. A completed intelligence run also feeds the Milestone 5 knowledge proposal stage, which reuses verified organization/identifier evidence and adds deterministic temporal candidates. It never writes canonical life-model records directly; see [Document knowledge](KNOWLEDGE.md).
+
 Milestone 3 adds local, review-first document understanding after normalized text extraction. It does not add search, embeddings, chat, or remote AI dependencies.
 
 ## Processing contract

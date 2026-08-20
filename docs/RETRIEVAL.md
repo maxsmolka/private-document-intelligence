@@ -1,5 +1,7 @@
 # Retrieval and search
 
+Milestone 5 extends the canonical search projection with accepted contract title/reference values. Accepted organizations, contracts, and organization merges refresh affected search rows transactionally; rejected or pending knowledge proposals are not searchable as canonical facts.
+
 Milestone 4 answers two questions: which documents match a query, and which persisted passages support that match. It does not generate answers, run chat, or integrate Atlas.
 
 ## Search representation

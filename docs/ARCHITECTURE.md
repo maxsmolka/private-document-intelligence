@@ -6,7 +6,7 @@ PDI is the authoritative, local-first system of record for documents, originals,
 
 Atlas Personal Intelligence is a future API consumer. Atlas may reason over PDI data and retain derived reasoning, but it must never read PDI's PostgreSQL database or storage volume. PDI-derived facts remain authoritative in PDI.
 
-Authentication, semantic search, embeddings, Atlas integration, Paperless import, and external ingestion are not part of Milestone 4.
+Authentication, semantic search, embeddings, Atlas integration, Paperless import, notifications, and external ingestion are not part of Milestone 5.
 
 ## System context
 
@@ -75,6 +75,9 @@ flowchart TD
     I --> V["Evidence-backed review"]
     E --> X["Weighted PostgreSQL search row"]
     V --> X
+    I --> K["Versioned knowledge proposals"]
+    K -->|"explicit review"| L["Relational life model"]
+    L --> X
 ```
 
 ## Proposals and review
@@ -93,6 +96,10 @@ All consumer routes remain under `/api/v1`; health routes remain unversioned. Co
 
 `search_documents` is an explicit, content-hashed projection of approved canonical fields and normalized extraction text. The API and worker update it synchronously inside source transactions; migration backfill and idempotent rebuild cover existing data and maintenance. PostgreSQL uses German weighted vectors, GIN retrieval, and an exact accepted-identifier expression index. Ranking combines `ts_rank_cd` with four documented exact-field boosts. Snippets are bounded slices of persisted page text with structured highlight ranges. See [Retrieval](RETRIEVAL.md), [benchmark](RETRIEVAL_BENCHMARK.md), and [ADR 0003](adr/0003-postgresql-fts-baseline.md).
 
+## Document knowledge
+
+Completed intelligence runs feed a shared deterministic proposal stage. Canonical organizations, contracts, document relationships, events, deadlines, and actions exist only after evidence-gated review. Explicit relational tables and foreign keys keep provenance and common navigation straightforward; append-only history records decisions and state changes. Exact alias resolution may suggest a link, but only an explicit merge can consolidate organizations. Accepted organization/contract values and merge results refresh the M4 search projection in the same transaction. See [Document knowledge](KNOWLEDGE.md), [benchmark](KNOWLEDGE_BENCHMARK.md), and [ADR 0004](adr/0004-relational-review-first-knowledge.md).
+
 ## Future direction
 
-Document Knowledge & Life Model work may build organizations, contracts, events, deadlines, relationships, and provenance on PostgreSQL. Chat, embeddings, and Atlas integration remain future work; Atlas continues to consume only stable HTTP APIs.
+Chat, embeddings, notifications, richer entity types, and Atlas integration remain future work; Atlas continues to consume only stable HTTP APIs.
