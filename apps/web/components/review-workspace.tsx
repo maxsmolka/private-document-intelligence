@@ -1,17 +1,20 @@
 "use client";
 
-import { AlertTriangle, ArrowRight, Check, FileText, RotateCcw, Sparkles } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, FileText, Pencil, RotateCcw, Sparkles, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
+  acceptProposal,
   confirmReview,
   documentContentUrl,
   rejectReview,
+  rejectProposal,
   retryDocument,
   type ConfirmMetadata,
   type LifeArea,
+  type MetadataProposal,
   type ReviewDetail,
   type ReviewItem,
 } from "@/lib/api/documents";
@@ -29,7 +32,7 @@ export function ReviewWorkspace({ detail, queue }: { detail: ReviewDetail; queue
     life_area: (proposed.life_area as LifeArea | undefined) ?? document.life_area,
     document_type: proposed.document_type ?? document.document_type,
   });
-  const [busy, setBusy] = useState<"confirm" | "retry" | "reject" | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
   const next = queue.find((item) => item.document.id !== document.id)?.document.id;
   const ocrAsset = detail.assets.find((asset) => asset.kind === "ocr_pdf");
@@ -49,6 +52,14 @@ export function ReviewWorkspace({ detail, queue }: { detail: ReviewDetail; queue
     try { await rejectReview(document.id); router.refresh(); setBusy(null); }
     catch (reason) { setError(reason instanceof Error ? reason.message : "Could not reject proposals"); setBusy(null); }
   }
+  async function decide(proposal: MetadataProposal, action: "accept" | "reject", value?: string) {
+    setBusy(proposal.id); setError("");
+    try {
+      if (action === "accept") await acceptProposal(document.id, proposal.id, value);
+      else await rejectProposal(document.id, proposal.id);
+      router.refresh(); setBusy(null);
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not update proposal"); setBusy(null); }
+  }
 
   return <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_390px]">
     <section className="min-h-[72vh] overflow-hidden rounded-2xl border border-stone-200 bg-stone-100 shadow-sm"><div className="flex h-12 items-center justify-between border-b border-stone-200 bg-white px-4"><span className="text-xs font-medium text-stone-500">Original document</span><Link href={`/documents/${document.id}`} className="text-xs text-stone-400 hover:text-stone-700">Open details</Link></div>{document.mime_type.startsWith("image/") ? <div className="grid min-h-[calc(72vh-3rem)] place-items-center p-5"><img src={documentContentUrl(document.id)} alt={`Preview of ${document.title}`} className="max-h-[66vh] max-w-full rounded shadow-xl" /></div> : <iframe src={documentContentUrl(document.id)} title={`Preview of ${document.title}`} className="h-[calc(72vh-3rem)] w-full border-0" />}</section>
@@ -60,12 +71,21 @@ export function ReviewWorkspace({ detail, queue }: { detail: ReviewDetail; queue
         <Field label="Life area" proposed={proposed.life_area}><select value={values.life_area} onChange={(event) => setValues({ ...values, life_area: event.target.value as LifeArea })} className="field">{areas.map((area) => <option key={area} value={area}>{label(area)}</option>)}</select></Field>
         <Field label="Document type" proposed={proposed.document_type}><input maxLength={100} placeholder="e.g. Invoice" value={values.document_type ?? ""} onChange={(event) => setValues({ ...values, document_type: event.target.value || null })} className="field" /></Field>
       </div>
+      {detail.proposals.some((item) => item.status === "pending" && item.intelligence_run_id) ? <div className="space-y-3"><div className="flex items-center justify-between"><h3 className="text-sm font-semibold text-stone-800">Evidence-backed proposals</h3>{detail.current_intelligence_run ? <span className="text-[11px] text-stone-400">{detail.current_intelligence_run.provider} · schema {detail.current_intelligence_run.schema_version}</span> : null}</div>{detail.proposals.filter((item) => item.status === "pending" && item.intelligence_run_id).map((proposal) => <ProposalCard key={proposal.id} proposal={proposal} busy={busy === proposal.id} decide={decide} />)}</div> : null}
       {detail.extraction ? <div className="rounded-2xl border border-stone-200 bg-white p-4"><div className="flex items-center justify-between"><span className="flex items-center gap-2 text-xs font-medium text-stone-500"><FileText className="size-3.5" />Extracted text</span><span className="text-[11px] text-stone-400">{detail.extraction.provider} · {detail.extraction.page_count} {detail.extraction.page_count === 1 ? "page" : "pages"}</span></div>{ocrAsset ? <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg bg-stone-50 p-3 text-[11px] text-stone-500"><span>OCR</span><span className="text-right text-stone-700">Completed</span><span>Provider</span><span className="text-right text-stone-700">{ocrAsset.provider}</span></div> : null}<p className="mt-3 max-h-28 overflow-hidden whitespace-pre-wrap text-xs leading-5 text-stone-500">{detail.extraction.text || "No embedded text was found. This document is an OCR candidate."}</p></div> : null}
       {error ? <p role="alert" className="text-sm text-red-600">{error}</p> : null}
       <div className="flex flex-wrap gap-2"><Button type="submit" disabled={busy !== null}><Check className="size-4" />{busy === "confirm" ? "Saving…" : "Save & Confirm"}</Button><Button type="button" variant="secondary" onClick={retry} disabled={busy !== null}><RotateCcw className="size-4" />{busy === "retry" ? "Queuing…" : "Retry processing"}</Button>{next ? <Link href={`/review?id=${next}`} className="inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm text-stone-500 hover:bg-stone-100">Skip <ArrowRight className="size-4" /></Link> : null}</div>
       {detail.proposals.some((item) => item.status === "pending") ? <button type="button" onClick={reject} disabled={busy !== null} className="text-xs text-stone-400 underline-offset-4 hover:text-stone-700 hover:underline">Reject machine proposals</button> : null}
     </form>
   </div>;
+}
+
+function ProposalCard({ proposal, busy, decide }: { proposal: MetadataProposal; busy: boolean; decide: (proposal: MetadataProposal, action: "accept" | "reject", value?: string) => Promise<void> }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(proposal.normalized_value ?? proposal.proposed_value ?? "");
+  const confidence = proposal.confidence == null ? "Unknown" : proposal.confidence >= 0.85 ? "High" : proposal.confidence >= 0.65 ? "Medium" : "Low";
+  const tone = confidence === "High" ? "bg-emerald-50 text-emerald-700" : confidence === "Medium" ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-700";
+  return <article className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm"><div className="flex items-start justify-between gap-3"><div><div className="flex flex-wrap items-center gap-2"><span className="text-xs font-semibold text-stone-700">{label(proposal.field_name)}</span><span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${tone}`}>{confidence}{proposal.confidence == null ? "" : ` ${Math.round(proposal.confidence * 100)}%`}</span>{proposal.is_critical ? <span className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-600">Verify carefully</span> : null}</div>{editing ? <input autoFocus value={value} onChange={(event) => setValue(event.target.value)} className="field mt-2" /> : <p className="mt-1 text-sm font-medium text-stone-950">{proposal.normalized_value ?? proposal.proposed_value}</p>}</div><span className="text-[10px] text-stone-400">{proposal.provider}</span></div>{proposal.evidence.length ? <div className="mt-3 rounded-lg bg-stone-50 p-3"><div className="text-[10px] font-medium uppercase tracking-wide text-stone-400">Evidence · page {proposal.evidence[0].page}</div><p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-stone-600">“{proposal.evidence[0].text}”</p></div> : null}{proposal.validation_notes.includes("ocr_sensitive_value") ? <p className="mt-2 text-[11px] text-amber-700">OCR-sensitive value; compare it with the original.</p> : null}<div className="mt-3 flex gap-2"><Button type="button" onClick={() => void decide(proposal, "accept", editing ? value : undefined)} disabled={busy || !proposal.evidence_verified}><Check className="size-3.5" />{busy ? "Saving…" : "Accept"}</Button><Button type="button" variant="secondary" onClick={() => setEditing(!editing)} disabled={busy}><Pencil className="size-3.5" />{editing ? "Cancel edit" : "Edit"}</Button><button type="button" onClick={() => void decide(proposal, "reject")} disabled={busy} className="inline-flex items-center gap-1 px-2 text-xs text-stone-400 hover:text-red-600"><X className="size-3.5" />Reject</button></div></article>;
 }
 
 function Field({ label: fieldLabel, proposed, children }: { label: string; proposed?: string | null; children: React.ReactNode }) {

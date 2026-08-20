@@ -32,6 +32,7 @@ export interface DocumentRecord {
   life_area: LifeArea;
   document_type: string | null;
   source: string;
+  canonical_metadata: Record<string, unknown>;
 }
 
 export interface DocumentListResponse {
@@ -77,8 +78,16 @@ export interface MetadataProposal {
   document_id: string;
   field_name: string;
   proposed_value: string | null;
+  normalized_value: string | null;
+  structured_value: Record<string, unknown> | unknown[] | null;
   source: string;
+  provider: string | null;
+  intelligence_run_id: string | null;
   confidence: number | null;
+  evidence: Array<{ page: number; start: number; end: number; text: string; verified: boolean }>;
+  evidence_verified: boolean;
+  validation_notes: string[];
+  is_critical: boolean;
   status: "pending" | "accepted" | "rejected" | "superseded";
   created_at: string;
   confirmed_at: string | null;
@@ -116,6 +125,39 @@ export interface ReviewDetail {
   proposals: MetadataProposal[];
   latest_job: IngestionJob | null;
   assets: DocumentAsset[];
+  current_intelligence_run: IntelligenceRun | null;
+  metadata_history: CanonicalMetadataHistory[];
+}
+
+export interface IntelligenceRun {
+  id: string;
+  document_id: string;
+  input_extraction_id: string;
+  input_content_hash: string;
+  provider: string;
+  provider_version: string;
+  schema_version: string;
+  prompt_version: string | null;
+  status: "running" | "completed" | "failed";
+  is_current: boolean;
+  started_at: string;
+  finished_at: string | null;
+  duration_ms: number | null;
+  error_category: string | null;
+  sanitized_error: string | null;
+  result: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface CanonicalMetadataHistory {
+  id: string;
+  document_id: string;
+  field_name: string;
+  previous_value: unknown;
+  new_value: unknown;
+  source_proposal_id: string | null;
+  confirmation_source: string;
+  confirmed_at: string;
 }
 
 export interface ConfirmMetadata {
@@ -188,6 +230,19 @@ export function confirmReview(id: string, values: ConfirmMetadata) {
 
 export function rejectReview(id: string) {
   return mutate<MetadataProposal[]>(`/api/v1/review/${encodeURIComponent(id)}/reject`);
+}
+
+export function acceptProposal(documentId: string, proposalId: string, value?: string) {
+  return mutate<DocumentRecord>(
+    `/api/v1/review/${encodeURIComponent(documentId)}/proposals/${encodeURIComponent(proposalId)}/accept`,
+    value === undefined ? {} : { value },
+  );
+}
+
+export function rejectProposal(documentId: string, proposalId: string) {
+  return mutate<MetadataProposal>(
+    `/api/v1/review/${encodeURIComponent(documentId)}/proposals/${encodeURIComponent(proposalId)}/reject`,
+  );
 }
 
 export function retryDocument(id: string) {

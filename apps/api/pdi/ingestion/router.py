@@ -8,7 +8,9 @@ from pdi.core.database import get_session
 from pdi.documents.schemas import DocumentRead
 from pdi.ingestion.models import IngestionJob
 from pdi.ingestion.review import (
+    accept_document_proposal,
     confirm_document,
+    reject_document_proposal,
     reject_document_proposals,
     review_detail,
     review_documents,
@@ -19,6 +21,7 @@ from pdi.ingestion.schemas import (
     ExtractionRead,
     IngestionJobRead,
     MetadataProposalRead,
+    ProposalDecision,
     RejectProposals,
     ReviewDetail,
     ReviewItem,
@@ -71,6 +74,12 @@ async def review_document(document_id: UUID, session: Session) -> ReviewDetail:
         ],
         latest_job=job_read(job),
         assets=[DocumentAssetRead.model_validate(asset) for asset in document.assets],
+        current_intelligence_run=next(
+            (item for item in document.intelligence_runs if item.is_current), None
+        ),
+        metadata_history=sorted(
+            document.metadata_history, key=lambda item: item.confirmed_at, reverse=True
+        ),
     )
 
 
@@ -85,3 +94,19 @@ async def reject(
 ) -> list[MetadataProposalRead]:
     document = await reject_document_proposals(session, document_id, values.field_names)
     return [MetadataProposalRead.model_validate(item) for item in document.metadata_proposals]
+
+
+@router.post("/{document_id}/proposals/{proposal_id}/accept", response_model=DocumentRead)
+async def accept_proposal(
+    document_id: UUID, proposal_id: UUID, values: ProposalDecision, session: Session
+) -> DocumentRead:
+    document = await accept_document_proposal(session, document_id, proposal_id, values)
+    return DocumentRead.model_validate(document)
+
+
+@router.post("/{document_id}/proposals/{proposal_id}/reject", response_model=MetadataProposalRead)
+async def reject_proposal(
+    document_id: UUID, proposal_id: UUID, session: Session
+) -> MetadataProposalRead:
+    proposal = await reject_document_proposal(session, document_id, proposal_id)
+    return MetadataProposalRead.model_validate(proposal)
