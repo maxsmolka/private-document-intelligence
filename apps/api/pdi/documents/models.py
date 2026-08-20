@@ -74,6 +74,14 @@ class Document(Base):
     metadata_proposals: Mapped[list["MetadataProposal"]] = relationship(
         back_populates="document", cascade="all, delete-orphan"
     )
+    assets: Mapped[list["DocumentAsset"]] = relationship(
+        back_populates="document", cascade="all, delete-orphan"
+    )
 
 
-from pdi.ingestion.models import DocumentExtraction, IngestionJob, MetadataProposal  # noqa: E402
+from pdi.ingestion.models import (  # noqa: E402
+    DocumentAsset,
+    DocumentExtraction,
+    IngestionJob,
+    MetadataProposal,
+)

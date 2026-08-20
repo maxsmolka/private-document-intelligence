@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from pdi.documents.models import LifeArea
 from pdi.documents.schemas import DocumentRead
-from pdi.ingestion.models import IngestionJobState, ProposalStatus
+from pdi.ingestion.models import DocumentAssetKind, IngestionJobState, ProposalStatus
 
 
 class IngestionJobRead(BaseModel):
@@ -43,6 +43,21 @@ class ExtractionRead(BaseModel):
     updated_at: datetime
 
 
+class DocumentAssetRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    document_id: UUID
+    kind: DocumentAssetKind
+    mime_type: str
+    file_size: int
+    sha256: str
+    provider: str
+    provider_version: str
+    created_at: datetime
+    updated_at: datetime
+
+
 class MetadataProposalRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -75,6 +90,7 @@ class ReviewDetail(BaseModel):
     extraction: ExtractionRead | None
     proposals: list[MetadataProposalRead]
     latest_job: IngestionJobRead | None
+    assets: list[DocumentAssetRead]
 
 
 class ConfirmMetadata(BaseModel):

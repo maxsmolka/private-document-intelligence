@@ -2,10 +2,12 @@ from io import BytesIO
 from pathlib import Path
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from starlette.datastructures import Headers, UploadFile
 
 from pdi.documents.models import Document, DocumentStatus, LifeArea
+from pdi.ingestion.models import DocumentAsset, DocumentAssetKind
 from pdi.storage.local import LocalStorageBackend
 from pdi.storage.reconcile import reconcile_storage
 
@@ -32,6 +34,7 @@ async def test_reconciliation_reports_and_only_explicitly_cleans(
     storage = LocalStorageBackend(tmp_path / "reconcile")
     storage.path_for("known.pdf").write_bytes(b"known")
     storage.path_for("orphan.pdf").write_bytes(b"orphan")
+    storage.path_for("derived-ocr-orphan.pdf").write_bytes(b"derived")
     storage.path_for("stale.pdf.part").write_bytes(b"partial")
     async with session_factory() as session:
         session.add(
@@ -61,13 +64,34 @@ async def test_reconciliation_reports_and_only_explicitly_cleans(
             )
         )
         await session.commit()
+        known_document_id = await session.scalar(
+            select(Document.id).where(Document.storage_key == "known.pdf")
+        )
+        assert known_document_id is not None
+        session.add(
+            DocumentAsset(
+                document_id=known_document_id,
+                kind=DocumentAssetKind.OCR_PDF,
+                storage_key="derived-ocr-missing.pdf",
+                mime_type="application/pdf",
+                file_size=10,
+                sha256="f" * 64,
+                provider="ocrmypdf+tesseract",
+                provider_version="test",
+            )
+        )
+        await session.commit()
         report = await reconcile_storage(session, storage, stale_after_seconds=0)
         assert report.dry_run is True
-        assert report.orphaned_files == ["orphan.pdf"]
-        assert report.missing_files == ["missing.pdf"]
+        assert report.orphaned_files == ["derived-ocr-orphan.pdf", "orphan.pdf"]
+        assert report.missing_files == ["derived-ocr-missing.pdf", "missing.pdf"]
+        assert report.orphaned_derived_assets == ["derived-ocr-orphan.pdf"]
+        assert report.orphaned_original_files == ["orphan.pdf"]
+        assert report.missing_derived_assets == ["derived-ocr-missing.pdf"]
         assert report.stale_temporary_files == ["stale.pdf.part"]
         assert storage.path_for("orphan.pdf").exists()
         cleaned = await reconcile_storage(session, storage, cleanup=True, stale_after_seconds=0)
-        assert cleaned.deleted_files == ["orphan.pdf", "stale.pdf.part"]
+        assert cleaned.deleted_files == ["derived-ocr-orphan.pdf", "stale.pdf.part"]
         assert storage.path_for("known.pdf").exists()
-        assert not storage.path_for("orphan.pdf").exists()
+        assert storage.path_for("orphan.pdf").exists()
+        assert not storage.path_for("derived-ocr-orphan.pdf").exists()

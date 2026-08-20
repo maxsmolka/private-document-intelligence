@@ -15,6 +15,7 @@ from pdi.ingestion.review import (
 )
 from pdi.ingestion.schemas import (
     ConfirmMetadata,
+    DocumentAssetRead,
     ExtractionRead,
     IngestionJobRead,
     MetadataProposalRead,
@@ -69,6 +70,7 @@ async def review_document(document_id: UUID, session: Session) -> ReviewDetail:
             MetadataProposalRead.model_validate(item) for item in document.metadata_proposals
         ],
         latest_job=job_read(job),
+        assets=[DocumentAssetRead.model_validate(asset) for asset in document.assets],
     )
 
 

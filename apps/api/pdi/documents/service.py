@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pdi.documents.models import Document, DocumentStatus, LifeArea
+from pdi.ingestion.models import DocumentAsset, DocumentAssetKind
 from pdi.ingestion.queue import enqueue_document
 from pdi.storage.base import StorageBackend
 
@@ -62,6 +63,17 @@ async def create_document(
         status=DocumentStatus.INBOX,
         life_area=LifeArea.OTHER,
         source="upload",
+    )
+    document.assets.append(
+        DocumentAsset(
+            kind=DocumentAssetKind.ORIGINAL,
+            storage_key=stored.key,
+            mime_type=mime_type,
+            file_size=stored.size,
+            sha256=stored.sha256,
+            provider="upload",
+            provider_version="1",
+        )
     )
     try:
         session.add(document)

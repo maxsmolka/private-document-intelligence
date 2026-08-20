@@ -28,7 +28,10 @@ def parser() -> argparse.ArgumentParser:
     reconcile.add_argument(
         "--cleanup",
         action="store_true",
-        help="Delete reported orphan and stale temporary files; missing records are never deleted",
+        help=(
+            "Delete orphaned derived assets and stale temporary files; originals and missing "
+            "records are never deleted"
+        ),
     )
     reconcile.add_argument("--stale-after", type=int, default=3600, metavar="SECONDS")
     return root

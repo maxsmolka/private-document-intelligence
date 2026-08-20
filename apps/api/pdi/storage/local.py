@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import time
+import uuid
 from pathlib import Path
 
 from fastapi import HTTPException, status
@@ -26,7 +27,7 @@ class LocalStorageBackend:
 
     async def store(self, key: str, source: UploadFile, max_size: int) -> StoredFile:
         target = self.path_for(key)
-        temporary = target.with_suffix(target.suffix + ".part")
+        temporary = self.path_for(f"{target.name}.{uuid.uuid4().hex}.part")
         digest = hashlib.sha256()
         size = 0
         try:
@@ -46,13 +47,34 @@ class LocalStorageBackend:
             raise
         return StoredFile(key=key, size=size, sha256=digest.hexdigest())
 
+    async def store_path(self, key: str, source: Path, max_size: int) -> StoredFile:
+        target = self.path_for(key)
+        temporary = self.path_for(f"{target.name}.{uuid.uuid4().hex}.part")
+        digest = hashlib.sha256()
+        size = 0
+        try:
+            with source.open("rb") as input_file, temporary.open("xb") as output:
+                while chunk := await asyncio.to_thread(input_file.read, CHUNK_SIZE):
+                    size += len(chunk)
+                    if size > max_size:
+                        raise ValueError("Derived asset exceeds the configured size limit")
+                    digest.update(chunk)
+                    await asyncio.to_thread(output.write, chunk)
+            temporary.replace(target)
+        except BaseException:
+            temporary.unlink(missing_ok=True)
+            raise
+        return StoredFile(key=key, size=size, sha256=digest.hexdigest())
+
     async def delete(self, key: str) -> None:
         await asyncio.to_thread(self.path_for(key).unlink, missing_ok=True)
 
     async def list_keys(self) -> list[str]:
         return await asyncio.to_thread(
             lambda: sorted(
-                path.name for path in self.root.iterdir() if path.is_file() and not path.name.endswith(".part")
+                path.name
+                for path in self.root.iterdir()
+                if path.is_file() and not path.name.endswith(".part")
             )
         )
 

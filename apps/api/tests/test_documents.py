@@ -3,6 +3,10 @@ from pathlib import Path
 from typing import cast
 
 from httpx import AsyncClient
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from pdi.ingestion.models import DocumentAsset, DocumentAssetKind
 
 PDF = b"%PDF-1.7\nsmall test document\n%%EOF"
 PNG = b"\x89PNG\r\n\x1a\n" + b"test-image"
@@ -16,7 +20,11 @@ async def upload(client: AsyncClient, filename: str = "statement.pdf") -> dict[s
     return cast(dict[str, object], response.json())
 
 
-async def test_upload_persists_file_and_hash(client: AsyncClient, tmp_path: Path) -> None:
+async def test_upload_persists_file_and_hash(
+    client: AsyncClient,
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
     document = await upload(client, "../bank statement.pdf")
     assert document["original_filename"] == "bank statement.pdf"
     assert document["sha256"] == hashlib.sha256(PDF).hexdigest()
@@ -25,6 +33,12 @@ async def test_upload_persists_file_and_hash(client: AsyncClient, tmp_path: Path
     stored_files = list((tmp_path / "storage").glob("*.pdf"))
     assert len(stored_files) == 1
     assert stored_files[0].read_bytes() == PDF
+    async with session_factory() as session:
+        asset = await session.scalar(select(DocumentAsset))
+        assert asset is not None
+        assert asset.kind == DocumentAssetKind.ORIGINAL
+        assert asset.sha256 == document["sha256"]
+        assert asset.storage_key == stored_files[0].name
 
 
 async def test_rejects_unsupported_and_spoofed_uploads(client: AsyncClient) -> None:

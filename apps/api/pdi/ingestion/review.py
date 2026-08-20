@@ -43,6 +43,7 @@ async def review_detail(session: AsyncSession, document_id: uuid.UUID) -> Docume
             selectinload(Document.extraction),
             selectinload(Document.metadata_proposals),
             selectinload(Document.ingestion_jobs),
+            selectinload(Document.assets),
         )
     )
     if document is None:

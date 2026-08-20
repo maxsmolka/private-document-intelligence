@@ -5,6 +5,7 @@ from typing import Any
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     DateTime,
     Enum,
     Float,
@@ -13,6 +14,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     Uuid,
     func,
 )
@@ -36,6 +38,42 @@ class ProposalStatus(StrEnum):
     ACCEPTED = "accepted"
     REJECTED = "rejected"
     SUPERSEDED = "superseded"
+
+
+class DocumentAssetKind(StrEnum):
+    ORIGINAL = "original"
+    OCR_PDF = "ocr_pdf"
+
+
+class DocumentAsset(Base):
+    __tablename__ = "document_assets"
+    __table_args__ = (
+        UniqueConstraint("document_id", "kind", name="uq_document_assets_document_kind"),
+        Index("ix_document_assets_storage_key", "storage_key", unique=True),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[DocumentAssetKind] = mapped_column(
+        Enum(
+            DocumentAssetKind,
+            name="document_asset_kind",
+            values_callable=lambda values: [value.value for value in values],
+        )
+    )
+    storage_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    file_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    provider: Mapped[str] = mapped_column(String(100), nullable=False)
+    provider_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    document: Mapped["Document"] = relationship(back_populates="assets")
 
 
 class IngestionJob(Base):
