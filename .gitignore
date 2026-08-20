@@ -12,7 +12,9 @@ __pycache__/
 .coverage
 coverage.xml
 htmlcov/
-storage/
+/storage/
+benchmark-corpus/
+benchmark-results.json
 *.db
 *.sqlite*
 .DS_Store
