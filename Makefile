@@ -1,4 +1,4 @@
-.PHONY: dev up down test lint format migrate
+.PHONY: dev up down logs test lint format migrate worker reconcile benchmark-ocr
 
 dev:
 	docker compose up --build
@@ -9,17 +9,29 @@ up:
 down:
 	docker compose down
 
+logs:
+	docker compose logs -f api worker web
+
 test:
 	cd apps/api && uv run pytest
 
 lint:
-	cd apps/api && uv run ruff check . && uv run ruff format --check . && uv run mypy .
+	cd apps/api && uv run ruff check . ../../scripts && uv run ruff format --check . ../../scripts && uv run mypy .
 	cd apps/web && npm run lint && npm run typecheck
 
 format:
-	cd apps/api && uv run ruff check --fix . && uv run ruff format .
+	cd apps/api && uv run ruff check --fix . ../../scripts && uv run ruff format . ../../scripts
 	cd apps/web && npm run lint -- --fix
 
 migrate:
 	cd apps/api && uv run alembic upgrade head
 
+worker:
+	cd apps/api && uv run pdi-worker
+
+reconcile:
+	docker compose run --rm api pdi storage reconcile
+
+benchmark-ocr:
+	uv run --project apps/api python scripts/generate_benchmark_corpus.py apps/api/benchmark-corpus
+	cd apps/api && uv run pdi-benchmark-ocr benchmark-corpus --output benchmark-results.json

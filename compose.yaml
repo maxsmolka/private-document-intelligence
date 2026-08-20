@@ -1,5 +1,17 @@
 name: pdi
 
+x-backend-environment: &backend-environment
+  PDI_ENV: development
+  PDI_DATABASE_URL: postgresql+asyncpg://pdi:pdi@postgres:5432/pdi
+  PDI_STORAGE_PATH: /data/documents
+  PDI_MAX_UPLOAD_SIZE: 26214400
+  PDI_LOG_LEVEL: INFO
+  PDI_WORKER_POLL_INTERVAL: 2
+  PDI_WORKER_MAX_ATTEMPTS: 3
+  PDI_WORKER_JOB_TIMEOUT: 300
+  PDI_WORKER_CONCURRENCY: 1
+  PDI_OCR_ENABLED: "false"
+
 services:
   postgres:
     image: postgres:17-alpine
@@ -17,14 +29,11 @@ services:
     restart: unless-stopped
 
   api:
+    image: pdi-backend:local
     build:
       context: ./apps/api
     environment:
-      PDI_ENV: development
-      PDI_DATABASE_URL: postgresql+asyncpg://pdi:pdi@postgres:5432/pdi
-      PDI_STORAGE_PATH: /data/documents
-      PDI_MAX_UPLOAD_SIZE: 26214400
-      PDI_LOG_LEVEL: INFO
+      <<: *backend-environment
       PDI_CORS_ORIGINS: '["http://localhost:3000"]'
     volumes:
       - document_storage:/data/documents
@@ -39,6 +48,28 @@ services:
       timeout: 3s
       retries: 10
       start_period: 10s
+    restart: unless-stopped
+
+  worker:
+    image: pdi-backend:local
+    command: ["pdi-worker"]
+    environment:
+      <<: *backend-environment
+      PDI_WORKER_IDENTITY: compose-worker
+    volumes:
+      - document_storage:/data/documents
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-m", "pdi.ingestion.health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    stop_grace_period: 330s
     restart: unless-stopped
 
   web:

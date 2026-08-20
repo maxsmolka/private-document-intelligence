@@ -11,6 +11,23 @@ permissions:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: pdi_test
+          POSTGRES_USER: pdi
+          POSTGRES_PASSWORD: pdi
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pdi -d pdi_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      PDI_TEST_POSTGRES_URL: postgresql+asyncpg://pdi:pdi@localhost:5432/pdi_test
+      PDI_DATABASE_URL: postgresql+asyncpg://pdi:pdi@localhost:5432/pdi_test
     defaults:
       run:
         working-directory: apps/api
@@ -22,8 +39,9 @@ jobs:
           cache-dependency-glob: apps/api/uv.lock
           python-version: "3.13"
       - run: uv sync --locked
-      - run: uv run ruff check .
-      - run: uv run ruff format --check .
+      - run: uv run alembic upgrade head
+      - run: uv run ruff check . ../../scripts
+      - run: uv run ruff format --check . ../../scripts
       - run: uv run mypy .
       - run: uv run pytest
 
@@ -43,4 +61,3 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run build
-
