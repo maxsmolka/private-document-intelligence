@@ -6,7 +6,7 @@ PDI is the authoritative, local-first system of record for documents, originals,
 
 Atlas Personal Intelligence is a future API consumer. Atlas may reason over PDI data and retain derived reasoning, but it must never read PDI's PostgreSQL database or storage volume. PDI-derived facts remain authoritative in PDI.
 
-Authentication, LLM extraction, semantic search, embeddings, Atlas integration, Paperless import, and external ingestion are not part of Milestone 2.
+Authentication, LLM extraction, semantic search, embeddings, Atlas integration, Paperless import, and external ingestion are not part of Milestone 2.1.
 
 ## System context
 
@@ -47,7 +47,7 @@ stateDiagram-v2
 
 `DocumentStatus` represents the user-facing lifecycle (`inbox`, `processing`, `needs_review`, `ready`, `archived`, `failed`). `IngestionJobState` represents worker execution. Valid transitions live in one testable state machine; every transition creates an `IngestionJobEvent` in the same transaction as the job change.
 
-Upload streams to a same-directory `.part` file, calculates SHA-256, enforces the byte limit, and atomically renames to a UUID key. The API then commits the document and queued job together. A normal database failure deletes the new final file. A process crash between rename and commit can leave a recoverable orphan, which reconciliation reports.
+Upload streams to a same-directory `.part` file, calculates SHA-256, enforces the byte limit, and atomically renames to a UUID key. The API commits the document, original `DocumentAsset`, and queued job together. Original assets are immutable. OCR results use a content-addressed key and are promoted atomically before the active `ocr_pdf` asset record is committed. A crash can leave a recoverable orphan, which reconciliation reports.
 
 ## PostgreSQL queue
 
@@ -59,9 +59,20 @@ Failures retain a sanitized category/message. Attempts below the bound return to
 
 `ExtractionProvider` is deliberately small: support detection and asynchronous extraction. `ExtractionResult` includes normalized text, per-page text, page count, method, provider/version, warnings, language, and provider metadata. `DocumentExtraction` persists that provenance independently of document metadata.
 
-PyPDF handles digital PDFs. Text is normalized with Unicode NFKC, CRLF/CR conversion, trailing-space removal, maximum two consecutive newlines, and outer whitespace removal. OCR is required deterministically when non-whitespace text is below 40 characters per page or more than half the pages contain fewer than 10 characters.
+PyPDF handles digital PDFs. Text is normalized with Unicode NFKC, CRLF/CR conversion, trailing-space removal, maximum two consecutive newlines, and outer whitespace removal. The deterministic heuristic measures total characters and useful/empty pages. Any page below 40 non-whitespace characters requests OCR, with an explainable reason such as `2_of_4_pages_without_usable_text`; this prevents mixed PDFs from silently losing scanned pages.
 
-Image input can use an installed Tesseract executable when OCR is enabled. The subprocess receives explicit arguments, never uses a shell, and has a timeout. Without an available OCR engine, the worker persists an `ocr_candidate` extraction with warnings and still sends the document to review. Scanned-PDF OCR remains benchmark-ready rather than silently selecting an unmeasured engine.
+OCRmyPDF 14.0.1 with Tesseract 5.3.0 is the scanned-PDF default. It uses `--skip-text`, so native pages remain intact while scanned pages are OCRed; deskew and bounded-confidence rotation are enabled. The searchable PDF becomes a derived asset and its text is parsed through the same PyPDF normalization path. PNG/JPEG inputs use Tesseract directly and the same `DocumentExtraction` model.
+
+```mermaid
+flowchart TD
+    O["Original asset (immutable)"] --> N["Native extraction"]
+    N -->|"text sufficient"| E["Normalized DocumentExtraction"]
+    N -->|"OCR required"| R["OCRmyPDF + Tesseract"]
+    R --> D["Derived OCR asset"]
+    D --> P["PyPDF text extraction"]
+    P --> E
+    E --> V["Review"]
+```
 
 ## Proposals and review
 
@@ -69,7 +80,7 @@ Machine-derived proposals are stored in `metadata_proposals` with source, confid
 
 ## Storage reconciliation
 
-`pdi storage reconcile` compares final files with database keys and reports orphan files, missing files, and stale `.part` uploads. It is a dry-run by default. `--cleanup` deletes only reported orphans and stale temporary files; it never deletes database records or fabricates missing originals.
+`pdi storage reconcile` compares originals and derived assets with storage. It reports orphan originals, orphan derived assets, missing originals/derived assets, and stale `.part` staging files. It is dry-run by default. Explicit cleanup deletes only orphan derived assets and stale staging files; recoverable originals and database records are never deleted.
 
 ## API and pagination
 
@@ -78,4 +89,3 @@ All consumer routes remain under `/api/v1`; health routes remain unversioned. Co
 ## Future direction
 
 Milestone 3 may add deterministic and model-backed classification/extraction behind provider boundaries. PostgreSQL full-text search precedes any vector use. Atlas continues to consume only stable HTTP APIs.
-

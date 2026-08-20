@@ -2,7 +2,7 @@
 
 ## Deployment posture
 
-PDI Milestone 2 has no authentication or authorization and must not be exposed directly to the public internet. Use a trusted private network, VPN, or authenticated reverse proxy. Replace the example database password, terminate TLS, restrict database/API ports, and back up PostgreSQL and document storage together.
+PDI Milestone 2.1 has no authentication or authorization and must not be exposed directly to the public internet. Use a trusted private network, VPN, or authenticated reverse proxy. Replace the example database password, terminate TLS, restrict database/API ports, and back up PostgreSQL and document storage together.
 
 ## Current safeguards
 
@@ -15,14 +15,16 @@ PDI Milestone 2 has no authentication or authorization and must not be exposed d
 - request IDs plus job/document IDs without sensitive payloads
 - machine proposals cannot silently overwrite canonical metadata
 - bounded worker attempts, polling, concurrency, job timeouts, and stale-claim recovery
-- OCR subprocesses use explicit arguments, no shell, fixed language/config options, captured output, and a timeout
-- reconciliation is dry-run by default and never deletes missing database records
+- OCR subprocesses use explicit arguments, no shell, private temporary paths, captured output, cancellation cleanup, and a hard timeout
+- OCR is capped at 100 pages, 100 megapixels per page, 100 MiB derived output, one subprocess job, and one worker by default
+- original assets are immutable; derived files are atomically promoted under content-addressed keys
+- reconciliation is dry-run by default and cleanup never deletes recoverable originals or missing database records
 
 ## Malformed documents and resource exhaustion
 
 PyPDF runs inside the bounded worker job but is still a parser for untrusted input. Large or corrupt object graphs, extreme page dimensions, compressed streams, and decompression bombs may consume disproportionate CPU or memory. Keep `PDI_MAX_UPLOAD_SIZE`, `PDI_WORKER_JOB_TIMEOUT`, and concurrency conservative. Container-level CPU/memory limits can be applied through deployment overrides after observing the host; defaults avoid breaking small installations.
 
-Tesseract is optional and disabled by default in the base image. If enabled, install and patch it deliberately, constrain the container, and treat trained-data/model files as code-like dependencies. OCRmyPDF and PaddleOCR are benchmark candidates, not trusted automatically. Never construct subprocess arguments from original filenames, use `shell=True`, or expose arbitrary OCR flags through document metadata.
+OCRmyPDF, Ghostscript, qpdf, image codecs, and Tesseract parse hostile native formats. PDI bounds time, pages, image dimensions, output size, attempts, and concurrency, but does not provide a perfect native-code sandbox or hard memory/disk quota. Keep the image patched and apply container CPU/memory/PID limits appropriate to the host. A decompression bomb may consume resources before every application limit can intervene; temporary disk exhaustion and kernel OOM termination remain residual risks. Never construct subprocess arguments from original filenames, use `shell=True`, or expose arbitrary OCR flags through document metadata.
 
 PDI does not currently provide antivirus scanning, PDF sanitization, per-user quotas, application-layer encryption, sandbox namespaces, or authentication. Browser PDF viewers also process untrusted input and must remain patched.
 
@@ -31,4 +33,3 @@ PDI does not currently provide antivirus scanning, PDF sanitization, per-user qu
 Originals, OCR text, metadata proposals, and review history are sensitive. The M2 providers run locally and make no outbound provider calls. A future external intelligence provider must be explicit opt-in, record provenance, minimize transmitted data, redact logs, and preserve PDI as the canonical record. Prompt content must never grant filesystem, database, or network capabilities.
 
 Report vulnerabilities privately to maintainers without attaching sensitive documents to public issues.
-

@@ -1,6 +1,6 @@
 # PDI — Private Document Intelligence
 
-PDI is a fast, privacy-first document system designed for self-hosting on modest hardware. Milestone 2 adds durable ingestion, embedded PDF text extraction, deterministic OCR decisions, provenance, and a human review queue without Redis or external AI.
+PDI is a fast, privacy-first document system designed for self-hosting on modest hardware. Milestone 2.1 adds production scanned-document OCR, immutable originals, derived-asset provenance, and a human review queue without Redis or external AI.
 
 ## What works
 
@@ -11,7 +11,8 @@ PDI is a fast, privacy-first document system designed for self-hosting on modest
 - JSON request logging, readiness/liveness checks, and basic security headers
 - Docker Compose deployment with persistent PostgreSQL and document volumes
 - PostgreSQL-backed, auditable ingestion jobs with bounded retry and stale-claim recovery
-- Dedicated graceful worker with native PDF extraction and optional local Tesseract image OCR
+- Dedicated graceful worker with native PDF extraction, OCRmyPDF/Tesseract scanned-PDF OCR, and Tesseract image OCR
+- Immutable originals plus content-addressed searchable OCR PDFs with provider/version provenance
 - Separate normalized extraction and machine-proposal records
 - Review UI for confirming title, date, life area, and document type
 - Dry-run storage reconciliation for orphan, missing, and stale temporary files
@@ -28,7 +29,7 @@ docker compose up --build
 
 Open [http://localhost:3000](http://localhost:3000). The API is available at [http://localhost:8000](http://localhost:8000), with interactive docs at `/docs`.
 
-The API container applies pending Alembic migrations before it starts. The worker starts after the API is healthy and processes the durable PostgreSQL queue. Uploaded documents, jobs, extraction, proposals, and canonical metadata persist in the named `document_storage` and `postgres_data` volumes and survive container restarts.
+The API container applies pending Alembic migrations before it starts. The worker starts after the API is healthy and processes the durable PostgreSQL queue. Originals, derived OCR assets, jobs, extraction, proposals, and canonical metadata persist in the named `document_storage` and `postgres_data` volumes and survive container restarts. OCR is enabled in Compose with German and English language data and conservative concurrency of one.
 
 Stop the application:
 
