@@ -21,7 +21,7 @@ async def test_upload_persists_file_and_hash(client: AsyncClient, tmp_path: Path
     assert document["original_filename"] == "bank statement.pdf"
     assert document["sha256"] == hashlib.sha256(PDF).hexdigest()
     assert document["file_size"] == len(PDF)
-    assert document["status"] == "ready"
+    assert document["status"] == "inbox"
     stored_files = list((tmp_path / "storage").glob("*.pdf"))
     assert len(stored_files) == 1
     assert stored_files[0].read_bytes() == PDF
@@ -53,7 +53,7 @@ async def test_list_detail_content_and_missing_document(client: AsyncClient) -> 
     )
     assert second.status_code == 201
 
-    listing = await client.get("/api/v1/documents", params={"status": "ready", "limit": 1})
+    listing = await client.get("/api/v1/documents", params={"status": "inbox", "limit": 1})
     assert listing.status_code == 200
     assert listing.json()["total"] == 2
     assert len(listing.json()["items"]) == 1
