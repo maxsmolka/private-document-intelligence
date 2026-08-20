@@ -1,4 +1,4 @@
-import { Bot, Clock3, FileCheck2, FileSearch, FileText, LayoutDashboard, Lightbulb, Settings } from "lucide-react";
+import { Bot, Building2, CalendarClock, Clock3, FileCheck2, FileSearch, FileText, LayoutDashboard, Lightbulb, ScrollText, Settings } from "lucide-react";
 import Link from "next/link";
 
 const navigation = [
@@ -6,8 +6,11 @@ const navigation = [
   { label: "Documents", icon: FileText, href: "/documents", enabled: true },
   { label: "Search", icon: FileSearch, href: "/search", enabled: true },
   { label: "Review", icon: FileCheck2, href: "/review", enabled: true },
-  { label: "Timeline", icon: Clock3, href: "#", enabled: false },
-  { label: "Insights", icon: Lightbulb, href: "#", enabled: false },
+  { label: "Knowledge review", icon: Lightbulb, href: "/review/knowledge", enabled: true },
+  { label: "Organizations", icon: Building2, href: "/organizations", enabled: true },
+  { label: "Contracts", icon: ScrollText, href: "/contracts", enabled: true },
+  { label: "Timeline", icon: Clock3, href: "/timeline", enabled: true },
+  { label: "Upcoming", icon: CalendarClock, href: "/upcoming", enabled: true },
   { label: "Ask PDI", icon: Bot, href: "#", enabled: false },
   { label: "Settings", icon: Settings, href: "#", enabled: false },
 ];

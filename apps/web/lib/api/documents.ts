@@ -213,13 +213,13 @@ export function publicApiUrl() {
   return process.env.NEXT_PUBLIC_PDI_API_URL ?? "http://localhost:8000";
 }
 
-async function request<T>(path: string): Promise<T> {
+export async function request<T>(path: string): Promise<T> {
   const response = await fetch(`${serverApiUrl()}${path}`, { cache: "no-store" });
   if (!response.ok) throw new ApiError(response.status, `PDI API returned ${response.status}`);
   return response.json() as Promise<T>;
 }
 
-async function mutate<T>(path: string, body?: object): Promise<T> {
+export async function mutate<T>(path: string, body?: object): Promise<T> {
   const response = await fetch(`${publicApiUrl()}${path}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
