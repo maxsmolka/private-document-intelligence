@@ -21,8 +21,13 @@ class Settings(BaseSettings):
     worker_concurrency: int = Field(default=1, ge=1, le=4)
     worker_identity: str | None = None
     ocr_enabled: bool = False
+    ocr_provider: Literal["ocrmypdf"] = "ocrmypdf"
     ocr_command_timeout: int = Field(default=180, ge=10)
     ocr_language: str = "deu+eng"
+    ocr_max_pages: int = Field(default=100, ge=1, le=1000)
+    ocr_max_image_mpixels: float = Field(default=100, gt=0, le=1000)
+    ocr_force_rotation: bool = True
+    ocr_max_derived_size: int = Field(default=100 * 1024 * 1024, gt=0)
 
 
 @lru_cache

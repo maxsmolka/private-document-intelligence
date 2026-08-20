@@ -6,7 +6,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from pdi.core.config import Settings
 from pdi.documents.models import Document, DocumentStatus, LifeArea
-from pdi.ingestion.models import DocumentExtraction, IngestionJobState, MetadataProposal
+from pdi.ingestion.extraction import ExtractionResult
+from pdi.ingestion.models import (
+    DocumentAsset,
+    DocumentAssetKind,
+    DocumentExtraction,
+    IngestionJobState,
+    MetadataProposal,
+)
 from pdi.ingestion.queue import claim_job, enqueue_document
 from pdi.ingestion.worker import process_job
 from pdi.storage.local import LocalStorageBackend
@@ -55,3 +62,94 @@ async def test_worker_processes_pdf_idempotently(
         assert "digital PDI document" in extraction.text
         proposals = list((await session.scalars(select(MetadataProposal))).all())
         assert [proposal.field_name for proposal in proposals] == ["title"]
+
+
+async def test_worker_persists_ocr_asset_and_retry_is_idempotent(
+    session_factory: async_sessionmaker[AsyncSession],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    storage = LocalStorageBackend(tmp_path / "ocr-storage")
+    original = storage.path_for("scan.pdf")
+    original_bytes = text_pdf("")
+    original.write_bytes(original_bytes)
+    settings = Settings(
+        env="test",
+        database_url=f"sqlite+aiosqlite:///{tmp_path / 'test.db'}",
+        storage_path=storage.root,
+        ocr_enabled=True,
+    )
+    from pdi.ingestion import worker
+
+    monkeypatch.setattr(worker, "get_storage", lambda: storage)
+
+    async def fake_ocr(_path: Path, _mime_type: str, **options: object) -> ExtractionResult:
+        work_dir = options["work_dir"]
+        assert isinstance(work_dir, Path)
+        derived = work_dir / "ocr-output.pdf"
+        derived.write_bytes(text_pdf("Searchable OCR text with invoice 1.234,56 EUR"))
+        return ExtractionResult(
+            text="Searchable OCR text with invoice 1.234,56 EUR",
+            page_count=1,
+            pages=["Searchable OCR text with invoice 1.234,56 EUR"],
+            method="ocr_pdf",
+            provider="ocrmypdf+tesseract",
+            provider_version="15.4.4",
+            metadata={"requires_ocr": True, "ocr_reason": "1_of_1_pages_without_usable_text"},
+            language="deu+eng",
+            derived_path=derived,
+        )
+
+    monkeypatch.setattr(worker, "extract_document", fake_ocr)
+    async with session_factory() as session:
+        document = Document(
+            title="scan",
+            original_filename="scan.pdf",
+            mime_type="application/pdf",
+            file_size=original.stat().st_size,
+            sha256="a" * 64,
+            storage_key="scan.pdf",
+            status=DocumentStatus.INBOX,
+            life_area=LifeArea.OTHER,
+            source="test",
+        )
+        document.assets.append(
+            DocumentAsset(
+                kind=DocumentAssetKind.ORIGINAL,
+                storage_key="scan.pdf",
+                mime_type="application/pdf",
+                file_size=original.stat().st_size,
+                sha256="a" * 64,
+                provider="upload",
+                provider_version="1",
+            )
+        )
+        session.add(document)
+        await enqueue_document(session, document, 3)
+        await session.commit()
+        first_job = await claim_job(session, "ocr-worker")
+        assert first_job is not None
+        await process_job(session, first_job, "ocr-worker", settings)
+        first_asset = await session.scalar(
+            select(DocumentAsset).where(DocumentAsset.kind == DocumentAssetKind.OCR_PDF)
+        )
+        assert first_asset is not None
+        first_key = first_asset.storage_key
+        assert storage.path_for(first_key).is_file()
+        assert original.read_bytes() == original_bytes
+
+        await enqueue_document(session, document, 3)
+        await session.commit()
+        retry_job = await claim_job(session, "ocr-worker")
+        assert retry_job is not None
+        await process_job(session, retry_job, "ocr-worker", settings)
+        assets = list(
+            (
+                await session.scalars(
+                    select(DocumentAsset).where(DocumentAsset.kind == DocumentAssetKind.OCR_PDF)
+                )
+            ).all()
+        )
+        assert len(assets) == 1
+        assert assets[0].storage_key == first_key
+        assert original.read_bytes() == original_bytes

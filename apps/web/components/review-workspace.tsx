@@ -32,6 +32,7 @@ export function ReviewWorkspace({ detail, queue }: { detail: ReviewDetail; queue
   const [busy, setBusy] = useState<"confirm" | "retry" | "reject" | null>(null);
   const [error, setError] = useState("");
   const next = queue.find((item) => item.document.id !== document.id)?.document.id;
+  const ocrAsset = detail.assets.find((asset) => asset.kind === "ocr_pdf");
 
   async function confirm(event: FormEvent) {
     event.preventDefault(); setBusy("confirm"); setError("");
@@ -59,7 +60,7 @@ export function ReviewWorkspace({ detail, queue }: { detail: ReviewDetail; queue
         <Field label="Life area" proposed={proposed.life_area}><select value={values.life_area} onChange={(event) => setValues({ ...values, life_area: event.target.value as LifeArea })} className="field">{areas.map((area) => <option key={area} value={area}>{label(area)}</option>)}</select></Field>
         <Field label="Document type" proposed={proposed.document_type}><input maxLength={100} placeholder="e.g. Invoice" value={values.document_type ?? ""} onChange={(event) => setValues({ ...values, document_type: event.target.value || null })} className="field" /></Field>
       </div>
-      {detail.extraction ? <div className="rounded-2xl border border-stone-200 bg-white p-4"><div className="flex items-center justify-between"><span className="flex items-center gap-2 text-xs font-medium text-stone-500"><FileText className="size-3.5" />Extracted text</span><span className="text-[11px] text-stone-400">{detail.extraction.provider} · {detail.extraction.page_count} page</span></div><p className="mt-3 max-h-28 overflow-hidden whitespace-pre-wrap text-xs leading-5 text-stone-500">{detail.extraction.text || "No embedded text was found. This document is an OCR candidate."}</p></div> : null}
+      {detail.extraction ? <div className="rounded-2xl border border-stone-200 bg-white p-4"><div className="flex items-center justify-between"><span className="flex items-center gap-2 text-xs font-medium text-stone-500"><FileText className="size-3.5" />Extracted text</span><span className="text-[11px] text-stone-400">{detail.extraction.provider} · {detail.extraction.page_count} {detail.extraction.page_count === 1 ? "page" : "pages"}</span></div>{ocrAsset ? <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg bg-stone-50 p-3 text-[11px] text-stone-500"><span>OCR</span><span className="text-right text-stone-700">Completed</span><span>Provider</span><span className="text-right text-stone-700">{ocrAsset.provider}</span></div> : null}<p className="mt-3 max-h-28 overflow-hidden whitespace-pre-wrap text-xs leading-5 text-stone-500">{detail.extraction.text || "No embedded text was found. This document is an OCR candidate."}</p></div> : null}
       {error ? <p role="alert" className="text-sm text-red-600">{error}</p> : null}
       <div className="flex flex-wrap gap-2"><Button type="submit" disabled={busy !== null}><Check className="size-4" />{busy === "confirm" ? "Saving…" : "Save & Confirm"}</Button><Button type="button" variant="secondary" onClick={retry} disabled={busy !== null}><RotateCcw className="size-4" />{busy === "retry" ? "Queuing…" : "Retry processing"}</Button>{next ? <Link href={`/review?id=${next}`} className="inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm text-stone-500 hover:bg-stone-100">Skip <ArrowRight className="size-4" /></Link> : null}</div>
       {detail.proposals.some((item) => item.status === "pending") ? <button type="button" onClick={reject} disabled={busy !== null} className="text-xs text-stone-400 underline-offset-4 hover:text-stone-700 hover:underline">Reject machine proposals</button> : null}
@@ -70,4 +71,3 @@ export function ReviewWorkspace({ detail, queue }: { detail: ReviewDetail; queue
 function Field({ label: fieldLabel, proposed, children }: { label: string; proposed?: string | null; children: React.ReactNode }) {
   return <label className="block"><span className="flex items-center justify-between text-xs font-medium text-stone-600">{fieldLabel}{proposed != null ? <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-600">Proposed</span> : null}</span><span className="mt-1.5 block">{children}</span></label>;
 }
-

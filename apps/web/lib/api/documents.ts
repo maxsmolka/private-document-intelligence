@@ -84,6 +84,19 @@ export interface MetadataProposal {
   confirmed_at: string | null;
 }
 
+export interface DocumentAsset {
+  id: string;
+  document_id: string;
+  kind: "original" | "ocr_pdf";
+  mime_type: string;
+  file_size: number;
+  sha256: string;
+  provider: string;
+  provider_version: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ReviewItem {
   document: DocumentRecord;
   warnings: string[];
@@ -102,6 +115,7 @@ export interface ReviewDetail {
   extraction: DocumentExtraction | null;
   proposals: MetadataProposal[];
   latest_job: IngestionJob | null;
+  assets: DocumentAsset[];
 }
 
 export interface ConfirmMetadata {

@@ -14,7 +14,16 @@ RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked --no-dev
 
 FROM python:3.13-slim-bookworm AS runtime
 ENV PATH="/opt/venv/bin:$PATH" PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
-RUN groupadd --system --gid 10001 pdi && useradd --system --uid 10001 --gid pdi --home-dir /app pdi && mkdir -p /data/documents /app && chown -R pdi:pdi /data /app
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends \
+        ocrmypdf \
+        tesseract-ocr-deu \
+        tesseract-ocr-eng \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system --gid 10001 pdi \
+    && useradd --system --uid 10001 --gid pdi --home-dir /app pdi \
+    && mkdir -p /data/documents /app \
+    && chown -R pdi:pdi /data /app
 WORKDIR /app
 COPY --from=builder /opt/venv /opt/venv
 COPY --from=builder --chown=pdi:pdi /app/pdi ./pdi

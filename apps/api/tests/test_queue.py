@@ -11,6 +11,7 @@ from pdi.ingestion.queue import (
     record_failure,
     recover_stale_jobs,
     retry_document_job,
+    transition_job,
 )
 
 
@@ -88,6 +89,16 @@ async def test_stale_claim_recovery_and_manual_retry(
         original = await document_and_job(session)
         job = await claim_job(session, "dead-worker")
         assert job is not None
+        transition_job(
+            session,
+            job,
+            IngestionJobState.EXTRACTING,
+            stage="text_extraction",
+            worker_id="dead-worker",
+        )
+        transition_job(
+            session, job, IngestionJobState.OCR, stage="ocr_processing", worker_id="dead-worker"
+        )
         job.heartbeat_at = datetime.now(UTC) - timedelta(hours=1)
         await session.commit()
         requeued, failed = await recover_stale_jobs(

@@ -1,9 +1,11 @@
 import asyncio
 import contextlib
+import hashlib
 import logging
 import os
 import signal
 import socket
+import tempfile
 import time
 import uuid
 from datetime import UTC, datetime
@@ -17,8 +19,15 @@ from pdi.core.config import Settings, get_settings
 from pdi.core.database import session_factory
 from pdi.core.logging import configure_logging
 from pdi.documents.models import Document, DocumentStatus
-from pdi.ingestion.extraction import ExtractionError, ExtractionResult, extract_document
+from pdi.ingestion.extraction import (
+    ExtractionError,
+    ExtractionResult,
+    NativePdfProvider,
+    extract_document,
+)
 from pdi.ingestion.models import (
+    DocumentAsset,
+    DocumentAssetKind,
     DocumentExtraction,
     IngestionJob,
     IngestionJobState,
@@ -52,6 +61,44 @@ async def persist_extraction(
     extraction.warnings = result.warnings
     extraction.extraction_metadata = result.metadata
     return extraction
+
+
+async def persist_derived_asset(
+    session: AsyncSession,
+    document_id: uuid.UUID,
+    result: ExtractionResult,
+    settings: Settings,
+) -> DocumentAsset | None:
+    if result.derived_path is None:
+        return None
+    storage = get_storage()
+    derived_path = result.derived_path
+
+    def sha256_file() -> str:
+        with derived_path.open("rb") as source:
+            return hashlib.file_digest(source, "sha256").hexdigest()
+
+    digest = await asyncio.to_thread(sha256_file)
+    key = f"derived-ocr-{document_id}-{digest}.pdf"
+    stored = await storage.store_path(key, derived_path, settings.ocr_max_derived_size)
+    asset = await session.scalar(
+        select(DocumentAsset).where(
+            DocumentAsset.document_id == document_id,
+            DocumentAsset.kind == DocumentAssetKind.OCR_PDF,
+        )
+    )
+    if asset is None:
+        asset = DocumentAsset(document_id=document_id, kind=DocumentAssetKind.OCR_PDF)
+        session.add(asset)
+    asset.storage_key = stored.key
+    asset.mime_type = "application/pdf"
+    asset.file_size = stored.size
+    asset.sha256 = stored.sha256
+    asset.provider = result.provider
+    asset.provider_version = result.provider_version
+    result.metadata["derived_asset_kind"] = DocumentAssetKind.OCR_PDF.value
+    result.metadata["derived_asset_sha256"] = stored.sha256
+    return asset
 
 
 async def ensure_metadata_proposals(session: AsyncSession, document: Document) -> None:
@@ -95,13 +142,31 @@ async def process_job(
     path = get_storage().path_for(document.storage_key)
     if not path.is_file():
         raise ExtractionError("Stored document file is missing")
-    result = await extract_document(
-        path,
-        document.mime_type,
-        ocr_enabled=settings.ocr_enabled,
-        ocr_timeout=settings.ocr_command_timeout,
-        ocr_language=settings.ocr_language,
-    )
+    native_result = None
+    ocr_required = document.mime_type.startswith("image/")
+    if document.mime_type == "application/pdf":
+        native_result = await NativePdfProvider().extract(path, document.mime_type)
+        ocr_required = bool(native_result.metadata.get("requires_ocr"))
+    if ocr_required and settings.ocr_enabled:
+        transition_job(
+            session, job, IngestionJobState.OCR, stage="ocr_processing", worker_id=worker_id
+        )
+        await session.commit()
+    with tempfile.TemporaryDirectory(prefix="pdi-ocr-") as temporary:
+        result = await extract_document(
+            path,
+            document.mime_type,
+            ocr_enabled=settings.ocr_enabled,
+            ocr_timeout=settings.ocr_command_timeout,
+            ocr_language=settings.ocr_language,
+            ocr_provider=settings.ocr_provider,
+            ocr_max_pages=settings.ocr_max_pages,
+            ocr_max_image_mpixels=settings.ocr_max_image_mpixels,
+            ocr_force_rotation=settings.ocr_force_rotation,
+            work_dir=Path(temporary),
+            native_result=native_result,
+        )
+        await persist_derived_asset(session, document.id, result, settings)
     logger.info(
         "extraction_completed",
         extra={
@@ -118,7 +183,7 @@ async def process_job(
             "duration_ms": result.metadata.get("normalization_duration_ms", 0),
         },
     )
-    if result.metadata.get("requires_ocr"):
+    if result.metadata.get("requires_ocr") and job.state == IngestionJobState.EXTRACTING:
         transition_job(
             session, job, IngestionJobState.OCR, stage="ocr_decision", worker_id=worker_id
         )
