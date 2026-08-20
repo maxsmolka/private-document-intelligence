@@ -160,6 +160,38 @@ export interface CanonicalMetadataHistory {
   confirmed_at: string;
 }
 
+export interface SearchHighlightRange {
+  start: number;
+  end: number;
+}
+
+export interface SearchSnippet {
+  page: number;
+  text: string;
+  highlight_ranges: SearchHighlightRange[];
+}
+
+export interface SearchResult {
+  document_id: string;
+  title: string;
+  document_type: string | null;
+  life_area: LifeArea;
+  document_date: string | null;
+  status: DocumentStatus;
+  score: number;
+  matched_fields: Array<"title" | "organization" | "identifier" | "canonical_metadata" | "text">;
+  snippets: SearchSnippet[];
+}
+
+export interface SearchResponse {
+  schema_version: "1";
+  query: string;
+  total: number;
+  limit: number;
+  offset: number;
+  results: SearchResult[];
+}
+
 export interface ConfirmMetadata {
   title: string;
   document_date: string | null;
@@ -214,6 +246,28 @@ export function getDocuments(filters?: { status?: string; lifeArea?: string }) {
 
 export function getDocument(id: string) {
   return request<DocumentRecord>(`/api/v1/documents/${encodeURIComponent(id)}`);
+}
+
+export function getSearch(filters: {
+  q?: string;
+  limit?: number;
+  offset?: number;
+  status?: string;
+  lifeArea?: string;
+  documentType?: string;
+  dateFrom?: string;
+  dateTo?: string;
+}) {
+  const params = new URLSearchParams();
+  if (filters.q) params.set("q", filters.q);
+  if (filters.limit) params.set("limit", String(filters.limit));
+  if (filters.offset) params.set("offset", String(filters.offset));
+  if (filters.status) params.set("status", filters.status);
+  if (filters.lifeArea) params.set("life_area", filters.lifeArea);
+  if (filters.documentType) params.set("document_type", filters.documentType);
+  if (filters.dateFrom) params.set("date_from", filters.dateFrom);
+  if (filters.dateTo) params.set("date_to", filters.dateTo);
+  return request<SearchResponse>(`/api/v1/search?${params}`);
 }
 
 export function getReviewQueue() {

@@ -11,7 +11,7 @@ COPY --from=dependencies /app/node_modules ./node_modules
 COPY . .
 ARG NEXT_PUBLIC_PDI_API_URL=http://localhost:8000
 ENV NEXT_PUBLIC_PDI_API_URL=$NEXT_PUBLIC_PDI_API_URL
-RUN npm run build
+RUN npm run lint && npm run build
 
 FROM node:22-alpine AS runtime
 WORKDIR /app
@@ -23,4 +23,3 @@ COPY --from=builder --chown=pdi:pdi /app/.next/static ./.next/static
 USER pdi
 EXPOSE 3000
 CMD ["node", "server.js"]
-

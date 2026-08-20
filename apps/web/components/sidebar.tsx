@@ -1,9 +1,10 @@
-import { Bot, Clock3, FileCheck2, FileText, LayoutDashboard, Lightbulb, Settings } from "lucide-react";
+import { Bot, Clock3, FileCheck2, FileSearch, FileText, LayoutDashboard, Lightbulb, Settings } from "lucide-react";
 import Link from "next/link";
 
 const navigation = [
   { label: "Overview", icon: LayoutDashboard, href: "/", enabled: true },
   { label: "Documents", icon: FileText, href: "/documents", enabled: true },
+  { label: "Search", icon: FileSearch, href: "/search", enabled: true },
   { label: "Review", icon: FileCheck2, href: "/review", enabled: true },
   { label: "Timeline", icon: Clock3, href: "#", enabled: false },
   { label: "Insights", icon: Lightbulb, href: "#", enabled: false },
