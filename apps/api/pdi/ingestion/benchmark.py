@@ -3,6 +3,7 @@ import asyncio
 import importlib.util
 import json
 import shutil
+import tempfile
 import time
 import tracemalloc
 from difflib import SequenceMatcher
@@ -26,13 +27,33 @@ async def benchmark_file(path: Path, sample: dict[str, Any]) -> dict[str, Any]:
     tracemalloc.start()
     cpu_started = time.process_time()
     wall_started = time.perf_counter()
-    result = await extract_document(
-        path,
-        mime_type,
-        ocr_enabled=True,
-        ocr_timeout=settings.ocr_command_timeout,
-        ocr_language=settings.ocr_language,
-    )
+    try:
+        with tempfile.TemporaryDirectory(prefix="pdi-benchmark-") as temporary:
+            result = await extract_document(
+                path,
+                mime_type,
+                ocr_enabled=True,
+                ocr_timeout=settings.ocr_command_timeout,
+                ocr_language=settings.ocr_language,
+                ocr_provider=settings.ocr_provider,
+                ocr_max_pages=settings.ocr_max_pages,
+                ocr_max_image_mpixels=settings.ocr_max_image_mpixels,
+                ocr_force_rotation=settings.ocr_force_rotation,
+                work_dir=Path(temporary),
+            )
+    except Exception as exc:
+        _current, peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+        return {
+            "file": path.name,
+            "category": sample.get("category", "unspecified"),
+            "mime_type": mime_type,
+            "success": False,
+            "error_category": type(exc).__name__,
+            "duration_seconds": round(time.perf_counter() - wall_started, 4),
+            "cpu_seconds": round(time.process_time() - cpu_started, 4),
+            "python_peak_memory_mb": round(peak / 1024 / 1024, 2),
+        }
     current, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
     quality = None
@@ -41,6 +62,11 @@ async def benchmark_file(path: Path, sample: dict[str, Any]) -> dict[str, Any]:
         quality = SequenceMatcher(
             None, normalize_text(expected_text), normalize_text(result.text)
         ).ratio()
+    critical_fields = sample.get("critical_fields", [])
+    matched_fields = sum(
+        normalize_text(str(field)) in normalize_text(result.text) for field in critical_fields
+    )
+    critical_accuracy = matched_fields / len(critical_fields) if critical_fields else None
     return {
         "file": path.name,
         "category": sample.get("category", "unspecified"),
@@ -48,6 +74,8 @@ async def benchmark_file(path: Path, sample: dict[str, Any]) -> dict[str, Any]:
         "mime_type": mime_type,
         "method": result.method,
         "provider": result.provider,
+        "provider_version": result.provider_version,
+        "success": True,
         "duration_seconds": round(time.perf_counter() - wall_started, 4),
         "cpu_seconds": round(time.process_time() - cpu_started, 4),
         "python_peak_memory_mb": round(peak / 1024 / 1024, 2),
@@ -55,6 +83,13 @@ async def benchmark_file(path: Path, sample: dict[str, Any]) -> dict[str, Any]:
         "page_count": result.page_count,
         "character_count": len(result.text),
         "quality_ratio": quality,
+        "critical_field_accuracy": critical_accuracy,
+        "critical_fields_matched": matched_fields,
+        "critical_fields_total": len(critical_fields),
+        "orientation_correction_expected": bool(sample.get("orientation_degrees")),
+        "orientation_correction_succeeded": (
+            quality is not None and quality >= 0.8 if sample.get("orientation_degrees") else None
+        ),
         "warnings": result.warnings,
     }
 

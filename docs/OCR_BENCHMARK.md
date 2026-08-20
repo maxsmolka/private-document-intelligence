@@ -1,35 +1,38 @@
 # OCR benchmark
 
-## Purpose and status
+## Reproduction
 
-PDI does not select an OCR default without measurements on representative documents. M2 ships a repeatable harness and an optional Tesseract image adapter. Native PyPDF extraction is the default for digital PDFs; scanned PDFs and images without an installed OCR provider are retained as reviewable OCR candidates.
+`make benchmark-ocr` generates only synthetic, non-sensitive material, then writes `apps/api/benchmark-results.json`. The 16-file corpus covers digital PDF, clean 300 DPI, 150 DPI, rotation, skew, low contrast, German business/invoice/insurance/tax/authority/contract documents, multi-page, mixed native/scan, tables, printed text with an annotation, PNG, and JPEG. A manifest provides ground truth and exact critical fields.
 
-## Candidate evaluation
+The production-container run below used OCRmyPDF 14.0.1+dfsg1, Tesseract 5.3.0 with `deu+eng`, and PyPDF 6.16.1 on Docker Desktop/Windows on 2026-08-20. Numbers are single-run controls, not universal host claims. Python `tracemalloc` does not see every native allocation, so reported memory is the observable Python peak; deployers should also monitor container RSS on their own hardware.
 
-| Candidate | Strengths | Costs and risks | M2 conclusion |
-| --- | --- | --- | --- |
-| OCRmyPDF + Tesseract | PDF-oriented pipeline, deskew/rotation support, searchable PDF output, mature German language packs | Several native tools, larger image, subprocess CPU/memory, PDF rewrite requires careful original preservation | Preferred first scanned-PDF experiment; not a default until corpus measurements pass |
-| PaddleOCR | Strong orientation/layout options and promising table/complex-document support | Large Python/model stack, model downloads, materially higher image and memory footprint on NAS hardware | Keep behind provider boundary; evaluate in a separate benchmark image |
-| Tesseract image adapter | Smallest functional path for JPEG/PNG, explicit local subprocess | No PDF preprocessing by itself; orientation and poor scans need preprocessing | Functional when installed and explicitly enabled |
+## Representative results
 
-## Corpus
+| Sample | Path | Pages | Wall s | CPU s | Python peak MiB | Similarity | Exact critical fields |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Digital German PDF | native PyPDF | 1 | 0.02 | 0.02 | 0.12 | 0.980 | n/a |
+| Clean 300 DPI scan | OCRmyPDF | 1 | 15.87 | 4.39 | 13.23 | 0.980 | n/a |
+| Rotated scan | OCRmyPDF | 1 | 15.28 | 5.28 | 13.21 | 0.992 | 0.750 |
+| Multi-page scan | OCRmyPDF | 3 | 26.92 | 12.20 | 34.54 | 0.987 | 0.714 |
+| Mixed native/scan | OCRmyPDF skip-text | 2 | 12.40 | 4.00 | 12.64 | 0.985 | 0.750 |
+| PNG invoice | Tesseract | 1 | 0.95 | 0.01* | 0.26 | 0.980 | 0.750 |
 
-Never commit personal documents. `scripts/generate_benchmark_corpus.py` creates a synthetic German digital PDF. Add local, non-sensitive samples for: clean scan, poor scan, 90°/180° rotation, German letter, invoice, insurance and official documents, multi-page input, and table-heavy input.
+`*` Python process CPU excludes most direct Tesseract subprocess CPU.
 
-Place files in `apps/api/benchmark-corpus` with `manifest.json`:
+All 13 OCRmyPDF PDF cases succeeded. Mean PDF OCR similarity was 0.9753 and mean exact critical-field accuracy across scored PDF cases was 0.7679. The rotation threshold was reduced from OCRmyPDF's default to 2 after the synthetic rotated page produced low-confidence orientation detection; the final run corrected it to 0.992 similarity. Table/annotation cases and exact currency symbols remain harder than prose. Exact scoring deliberately marks a changed digit, symbol, identifier, date, organization, postal code, or IBAN-like value wrong even when overall similarity is high.
 
-```json
-{
-  "invoice-scan.png": {
-    "category": "invoice",
-    "language": "deu",
-    "expected_text": "Ground truth text..."
-  }
-}
-```
+The backend image grew from 69,648,067 bytes to 163,243,040 bytes: +93,594,973 bytes (about 93.60 MB, 134%). This includes Ghostscript, qpdf/Python support, Tesseract, orientation data, and German/English trained data.
 
-Run `make benchmark-ocr` or `uv run pdi-benchmark-ocr benchmark-corpus --output benchmark-results.json`. The harness records wall time, Python CPU time, Python peak memory, provider/method, page count, output length, warnings, and a ground-truth similarity ratio. Native subprocess peak memory and full container size must also be recorded externally because Python allocation tracing cannot observe them.
+## Provider evaluation
 
-## Initial reproducible finding
+| Candidate | Evidence | Decision |
+| --- | --- | --- |
+| OCRmyPDF + Tesseract | 13/13 PDF success, searchable derived PDFs, mixed-page preservation, deskew/rotation, German quality, bounded one-job operation | Production default for PDF |
+| Direct Tesseract | PNG/JPEG success around one second on the synthetic invoice; smallest direct image path | Production image provider |
+| PaddleOCR | Not installed: no locked ML runtime/model exists in the worker, model download/storage and PDF orchestration would add unmeasured startup, memory, and image cost to an already +94 MB image | Preserve provider extension point; reevaluate only against a larger corpus |
 
-On the initial Windows development run, the synthetic digital-PDF sample extracted directly with PyPDF in 0.0627 seconds of wall time and 0.0469 seconds of Python CPU time. Python-traced peak memory was 0.96 MiB, page count was correct at one, and ground-truth similarity was 1.0 without invoking OCR. These are control-path numbers, not cross-machine performance claims. OCR accuracy, orientation, German scan quality, and container impact remain intentionally unscored until representative non-sensitive scans and separate candidate images are available. That missing evidence is a reason not to hard-code OCRmyPDF or PaddleOCR as the default.
+PaddleOCR's practical limitation is recorded rather than adding heavyweight dependencies without evidence. A future evaluation must use the same manifest and report accuracy, exact critical fields, latency, RSS, CPU, startup/model download, image delta, German quality, and deployment steps.
+
+## Local-only corpus
+
+Private documents must not be committed. To evaluate personal edge cases, copy them only into ignored `apps/api/benchmark-corpus`, add local manifest entries, run the harness, and keep both corpus and results outside version control. Useful additions are real scanner noise, handwriting, stamps, unusual fonts, and larger table layouts with manually verified ground truth.
