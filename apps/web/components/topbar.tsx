@@ -1,6 +1,6 @@
 "use client";
 
-import { Search } from "lucide-react";
+import { LogOut, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useRef, useState } from "react";
 
@@ -35,6 +35,14 @@ export function Topbar() {
     event.preventDefault();
     router.push(query.trim() ? `/search?q=${encodeURIComponent(query.trim())}` : "/search");
   }
+  async function logout() {
+    const csrf = document.cookie.split("; ").find((value) => value.startsWith("pdi_csrf="))?.split("=")[1];
+    await fetch(`${process.env.NEXT_PUBLIC_PDI_API_URL ?? "http://localhost:8000"}/api/v1/auth/logout`, {
+      method: "POST", credentials: "include", headers: csrf ? { "x-csrf-token": decodeURIComponent(csrf) } : {},
+    });
+    router.replace("/login");
+    router.refresh();
+  }
   return (
     <header className="flex h-16 items-center border-b border-stone-200/70 bg-[#fbfaf7]/90 px-5 backdrop-blur md:px-8">
       <div className="mx-auto flex w-full max-w-6xl items-center">
@@ -55,7 +63,7 @@ export function Topbar() {
             ⌘ K
           </kbd>
         </form>
-        <div className="ml-auto size-8 rounded-full bg-gradient-to-br from-amber-100 to-stone-200 ring-1 ring-stone-200" aria-label="Local PDI profile" />
+        <button onClick={logout} className="ml-auto rounded-lg p-2 text-stone-400 hover:bg-stone-100 hover:text-stone-700" aria-label="Sign out"><LogOut className="size-4" /></button>
       </div>
     </header>
   );

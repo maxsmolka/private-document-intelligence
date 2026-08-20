@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { DocumentExplorer } from "@/components/document-explorer";
 import { UploadDialog } from "@/components/upload-dialog";
-import { getDocuments } from "@/lib/api/documents";
+import { getDocuments } from "@/lib/api/server";
 
 export const metadata: Metadata = { title: "Documents" };
 
@@ -17,4 +17,3 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
     </div>
   );
 }
-

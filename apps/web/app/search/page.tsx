@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { SearchWorkspace } from "@/components/search-workspace";
-import { getSearch, type SearchResponse } from "@/lib/api/documents";
+import type { SearchResponse } from "@/lib/api/documents";
+import { getSearch } from "@/lib/api/server";
 
 export const metadata: Metadata = { title: "Search" };
 

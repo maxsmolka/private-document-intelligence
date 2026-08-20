@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { KnowledgeShell } from "@/components/knowledge-shell";
-import { getOrganization } from "@/lib/api/knowledge";
+import { getOrganization } from "@/lib/api/server";
 
 export default async function OrganizationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params; const item = await getOrganization(id).catch(() => null); if (!item) notFound();

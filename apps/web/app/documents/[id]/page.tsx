@@ -3,7 +3,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { RetryProcessingButton } from "@/components/retry-processing-button";
-import { ApiError, documentContentUrl, getDocument } from "@/lib/api/documents";
+import { ApiError, documentContentUrl } from "@/lib/api/documents";
+import { getDocument } from "@/lib/api/server";
 
 function label(value: string) {
   return value.replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase());

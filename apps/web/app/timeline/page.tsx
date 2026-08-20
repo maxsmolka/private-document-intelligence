@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { KnowledgeShell, dateLabel, label } from "@/components/knowledge-shell";
-import { getTimeline } from "@/lib/api/knowledge";
+import { getTimeline } from "@/lib/api/server";
 
 interface Filters { life_area?: string; event_type?: string; date_from?: string; date_to?: string }
 export const metadata = { title: "Timeline" };

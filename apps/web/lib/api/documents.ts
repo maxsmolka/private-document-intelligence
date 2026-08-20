@@ -220,9 +220,11 @@ export async function request<T>(path: string): Promise<T> {
 }
 
 export async function mutate<T>(path: string, body?: object): Promise<T> {
+  const csrf = document.cookie.split("; ").find((value) => value.startsWith("pdi_csrf="))?.split("=")[1];
   const response = await fetch(`${publicApiUrl()}${path}`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    credentials: "include",
+    headers: { "content-type": "application/json", ...(csrf ? { "x-csrf-token": decodeURIComponent(csrf) } : {}) },
     body: JSON.stringify(body ?? {}),
   });
   if (!response.ok) {

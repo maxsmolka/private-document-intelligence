@@ -34,6 +34,9 @@ export function UploadDialog() {
     const body = new FormData(); body.append("file", file);
     const request = new XMLHttpRequest();
     request.open("POST", `${publicApiUrl()}/api/v1/documents`);
+    request.withCredentials = true;
+    const csrf = document.cookie.split("; ").find((value) => value.startsWith("pdi_csrf="))?.split("=")[1];
+    if (csrf) request.setRequestHeader("x-csrf-token", decodeURIComponent(csrf));
     request.upload.addEventListener("progress", (event) => {
       if (event.lengthComputable) setProgress(Math.round((event.loaded / event.total) * 100));
     });
@@ -82,4 +85,3 @@ export function UploadDialog() {
     </Dialog.Root>
   );
 }
-

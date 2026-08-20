@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Building2 } from "lucide-react";
 import { KnowledgeShell, label } from "@/components/knowledge-shell";
-import { getOrganizations } from "@/lib/api/knowledge";
+import { getOrganizations } from "@/lib/api/server";
 
 export const metadata = { title: "Organizations" };
 export default async function OrganizationsPage() {
