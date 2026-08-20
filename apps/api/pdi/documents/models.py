@@ -1,9 +1,13 @@
 import uuid
 from datetime import date, datetime
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from sqlalchemy import JSON, BigInteger, Date, DateTime, Enum, Index, String, Uuid, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+if TYPE_CHECKING:
+    from pdi.search.models import SearchDocument
 
 
 class Base(DeclarativeBase):
@@ -83,6 +87,9 @@ class Document(Base):
     )
     metadata_history: Mapped[list["CanonicalMetadataHistory"]] = relationship(
         back_populates="document", cascade="all, delete-orphan"
+    )
+    search_document: Mapped["SearchDocument | None"] = relationship(
+        back_populates="document", cascade="all, delete-orphan", uselist=False
     )
 
 

@@ -15,6 +15,7 @@ from pdi.ingestion.models import (
     ProposalStatus,
 )
 from pdi.ingestion.schemas import ConfirmMetadata, ProposalDecision
+from pdi.search.service import refresh_search_index
 
 
 async def review_documents(
@@ -134,6 +135,7 @@ async def confirm_document(
             else ProposalStatus.SUPERSEDED
         )
         proposal.confirmed_at = now
+    await refresh_search_index(session, document, document.extraction)
     await session.commit()
     await session.refresh(document)
     return document
@@ -231,6 +233,7 @@ async def accept_document_proposal(
         ):
             competing.status = ProposalStatus.SUPERSEDED
             competing.confirmed_at = now
+    await refresh_search_index(session, document, document.extraction)
     await session.commit()
     await session.refresh(document)
     return document

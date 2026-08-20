@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pdi.documents.models import Document, DocumentStatus, LifeArea
 from pdi.ingestion.models import DocumentAsset, DocumentAssetKind
 from pdi.ingestion.queue import enqueue_document
+from pdi.search.service import refresh_search_index
 from pdi.storage.base import StorageBackend
 
 logger = logging.getLogger("pdi.documents")
@@ -78,6 +79,7 @@ async def create_document(
     try:
         session.add(document)
         await enqueue_document(session, document, max_attempts)
+        await refresh_search_index(session, document)
         await session.commit()
         await session.refresh(document)
     except BaseException:

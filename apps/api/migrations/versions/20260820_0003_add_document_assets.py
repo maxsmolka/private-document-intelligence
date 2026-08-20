@@ -25,13 +25,19 @@ def upgrade() -> None:
         sa.Column("sha256", sa.String(64), nullable=False),
         sa.Column("provider", sa.String(100), nullable=False),
         sa.Column("provider_version", sa.String(100), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.ForeignKeyConstraint(["document_id"], ["documents.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("document_id", "kind", name="uq_document_assets_document_kind"),
     )
-    op.create_index("ix_document_assets_storage_key", "document_assets", ["storage_key"], unique=True)
+    op.create_index(
+        "ix_document_assets_storage_key", "document_assets", ["storage_key"], unique=True
+    )
     op.execute(
         sa.text(
             """INSERT INTO document_assets

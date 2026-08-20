@@ -37,7 +37,9 @@ def upgrade() -> None:
         sa.Column("error_category", sa.String(100), nullable=True),
         sa.Column("sanitized_error", sa.String(500), nullable=True),
         sa.Column("result", sa.JSON(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.ForeignKeyConstraint(["document_id"], ["documents.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(
             ["input_extraction_id"], ["document_extractions.id"], ondelete="CASCADE"
@@ -45,8 +47,12 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("request_key", name="uq_intelligence_runs_request_key"),
     )
-    op.create_index("ix_intelligence_runs_document", "intelligence_runs", ["document_id", "created_at"])
-    op.create_index("ix_intelligence_runs_current", "intelligence_runs", ["document_id", "is_current"])
+    op.create_index(
+        "ix_intelligence_runs_document", "intelligence_runs", ["document_id", "created_at"]
+    )
+    op.create_index(
+        "ix_intelligence_runs_current", "intelligence_runs", ["document_id", "is_current"]
+    )
     for name, type_, nullable, default in (
         ("structured_value", sa.JSON(), True, None),
         ("normalized_value", sa.Text(), True, None),

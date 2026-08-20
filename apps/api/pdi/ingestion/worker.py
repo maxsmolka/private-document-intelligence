@@ -37,6 +37,7 @@ from pdi.ingestion.models import (
 )
 from pdi.ingestion.queue import claim_job, record_failure, recover_stale_jobs, transition_job
 from pdi.intelligence.service import run_intelligence
+from pdi.search.service import refresh_search_index
 from pdi.storage.dependencies import get_storage
 
 logger = logging.getLogger("pdi.worker")
@@ -212,6 +213,7 @@ async def process_job(
         extraction.warnings = [*extraction.warnings, "document_intelligence_failed"]
     await ensure_metadata_proposals(session, document)
     document.status = DocumentStatus.NEEDS_REVIEW
+    await refresh_search_index(session, document, extraction)
     transition_job(
         session,
         job,
