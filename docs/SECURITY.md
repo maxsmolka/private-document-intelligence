@@ -1,37 +1,34 @@
 # Security
 
-## Milestone 1 posture
+## Deployment posture
 
-PDI is intended for a trusted private network in Milestone 1. It has no authentication or authorization, so exposing ports 3000 or 8000 directly to the public internet is unsafe. Put it behind an authenticated reverse proxy or VPN if access outside the host is required.
+PDI Milestone 2 has no authentication or authorization and must not be exposed directly to the public internet. Use a trusted private network, VPN, or authenticated reverse proxy. Replace the example database password, terminate TLS, restrict database/API ports, and back up PostgreSQL and document storage together.
 
-Current safeguards include:
+## Current safeguards
 
-- UUID identifiers and server-generated storage keys
-- basename-only display filenames and storage-root containment checks
-- PDF/JPEG/PNG allow-list checked against file signatures
-- upload limits enforced while streaming
-- no file contents or original filenames in application logs
-- uploaded files are served as data and never executed
-- non-root API and web containers
-- secrets excluded through `.gitignore` and environment configuration
-- `nosniff`, frame, and referrer response headers where applicable
-- pinned dependency lockfiles and CI quality checks
+- UUID identifiers, server-generated storage keys, basename-only display names, and storage-root containment
+- PDF/JPEG/PNG signatures checked before persistence and byte limits enforced while streaming
+- atomic same-directory file completion; stale partial and orphan reporting
+- non-root API, worker, and web containers
+- pinned dependency lockfiles and CI checks
+- no document contents, extracted text, filenames, or proposal values in structured logs
+- request IDs plus job/document IDs without sensitive payloads
+- machine proposals cannot silently overwrite canonical metadata
+- bounded worker attempts, polling, concurrency, job timeouts, and stale-claim recovery
+- OCR subprocesses use explicit arguments, no shell, fixed language/config options, captured output, and a timeout
+- reconciliation is dry-run by default and never deletes missing database records
 
-## Operational recommendations
+## Malformed documents and resource exhaustion
 
-- Replace the example PostgreSQL password for any non-local deployment.
-- Terminate TLS at a maintained reverse proxy.
-- Restrict API and database network exposure with host firewall rules.
-- Back up both named volumes together and test restoration.
-- Limit filesystem permissions to the container identity.
-- Keep base images and dependencies patched; review automated dependency alerts.
-- Treat all documents and extracted metadata as sensitive personal data.
+PyPDF runs inside the bounded worker job but is still a parser for untrusted input. Large or corrupt object graphs, extreme page dimensions, compressed streams, and decompression bombs may consume disproportionate CPU or memory. Keep `PDI_MAX_UPLOAD_SIZE`, `PDI_WORKER_JOB_TIMEOUT`, and concurrency conservative. Container-level CPU/memory limits can be applied through deployment overrides after observing the host; defaults avoid breaking small installations.
 
-## Known limits and future work
+Tesseract is optional and disabled by default in the base image. If enabled, install and patch it deliberately, constrain the container, and treat trained-data/model files as code-like dependencies. OCRmyPDF and PaddleOCR are benchmark candidates, not trusted automatically. Never construct subprocess arguments from original filenames, use `shell=True`, or expose arbitrary OCR flags through document metadata.
 
-MIME signature validation is not malware detection. PDI does not yet scan files, sanitize PDFs, enforce per-user quotas, encrypt files at the application layer, or keep an audit trail. Browser PDF viewers process untrusted documents, so clients must remain patched.
+PDI does not currently provide antivirus scanning, PDF sanitization, per-user quotas, application-layer encryption, sandbox namespaces, or authentication. Browser PDF viewers also process untrusted input and must remain patched.
 
-Before authentication is introduced, define sessions, CSRF policy, password/passkey handling, recovery, rate limiting, and tenancy boundaries together. Before OCR or LLM processing, sandbox native tools with resource limits, prevent prompt injection from granting capabilities, make outbound data sharing opt-in, redact logs, and record which provider received which artifact. Antivirus integration is intentionally deferred until its operating and privacy trade-offs are understood.
+## Data and provider privacy
 
-Report vulnerabilities privately to the repository maintainers rather than opening a public issue containing exploit details or sensitive documents.
+Originals, OCR text, metadata proposals, and review history are sensitive. The M2 providers run locally and make no outbound provider calls. A future external intelligence provider must be explicit opt-in, record provenance, minimize transmitted data, redact logs, and preserve PDI as the canonical record. Prompt content must never grant filesystem, database, or network capabilities.
+
+Report vulnerabilities privately to maintainers without attaching sensitive documents to public issues.
 

@@ -1,70 +1,81 @@
 # Architecture
 
-## Goals
+## Goals and boundaries
 
-PDI is a local-first document intelligence platform that remains responsive on a home server or NAS. Its foundation favors a few replaceable components, direct data flow, explicit schema evolution, and dependencies with an immediate purpose.
+PDI is the authoritative, local-first system of record for documents, originals, extracted text, metadata, review state, search, and document lifecycle. It is designed for modest home-server and NAS hardware with direct data flow, explicit schema evolution, and replaceable components only where a concrete alternative exists.
 
-Milestone 1 proves one vertical slice: upload, durable file storage, metadata persistence, listing, detail retrieval, and preview.
+Atlas Personal Intelligence is a future API consumer. Atlas may reason over PDI data and retain derived reasoning, but it must never read PDI's PostgreSQL database or storage volume. PDI-derived facts remain authoritative in PDI.
 
-## Non-goals
-
-Milestone 1 does not include accounts, authentication, OCR, classifiers, LLMs, embeddings, vector storage, full-text search, background workers, or integrations. In particular, the `intelligence`, `search`, and `timeline` modules only mark future ownership boundaries; no hidden pipeline runs after upload.
+Authentication, LLM extraction, semantic search, embeddings, Atlas integration, Paperless import, and external ingestion are not part of Milestone 2.
 
 ## System context
 
 ```mermaid
-flowchart TD
-    U["Person using a browser"] --> W["Next.js web application"]
-    W --> A["FastAPI HTTP API"]
-    A --> P[("PostgreSQL metadata")]
-    A --> S[("Filesystem document storage")]
-    A -. "Milestone 2+" .-> I["Intelligence pipeline"]
-    I -.-> O["OCR / extraction"]
-    O -.-> L["Local or configured LLM"]
+flowchart LR
+    U["Browser"] --> W["Next.js web"]
+    W --> A["FastAPI /api/v1"]
+    A --> P[("PostgreSQL")]
+    A --> S[("Document storage")]
+    Q["Ingestion worker"] --> P
+    Q --> S
+    X["Future Atlas"] -. "versioned API only" .-> A
 ```
 
-The browser reaches the public API URL for uploads and previews. During server rendering, Next.js uses the internal Compose network URL. This keeps server traffic inside the deployment while preserving a URL reachable by the user's browser.
+The API and worker use one immutable Python image with separate entrypoints. The API applies Alembic migrations before becoming healthy; the worker waits for API health during Compose startup, then operates independently.
 
-## Components
+## Ingestion lifecycle
 
-### API
-
-FastAPI owns request validation and HTTP representation. Application functions in `pdi.documents.service` coordinate storage and SQLAlchemy operations. SQLAlchemy models are the initial domain/data model; a repository layer is deliberately absent because it would add indirection without another persistence implementation.
-
-The upload path reads only a small signature prefix during validation, resets the stream, and then copies fixed-size chunks. SHA-256 and file size are calculated during that single pass. If metadata commit fails, the stored file is removed. A generated UUID-based key—not the submitted filename—selects the storage path.
-
-### Web
-
-Next.js App Router pages are Server Components by default. The document list and detail data access goes through `lib/api/documents.ts`. Client Components are limited to filters/search and the interactive upload dialog. Upload uses `XMLHttpRequest` because browser `fetch` does not expose useful upload progress.
-
-### PostgreSQL
-
-PostgreSQL stores document metadata and relationships added in later milestones. Files are never stored as database blobs. The initial table indexes `created_at`, `status`, `life_area`, and `sha256`; SHA-256 is intentionally non-unique because Milestone 1 records duplicates rather than deduplicating silently.
-
-Alembic is the only schema creation/evolution mechanism in deployed environments. Application startup never calls `create_all`.
-
-### Storage
-
-`StorageBackend` describes the narrow operations the application needs: store a stream, resolve content, and delete. `LocalStorageBackend` confines keys to one configured root and finishes writes using a same-directory temporary file plus atomic rename. A future `S3StorageBackend` can implement the same behavior without changing routes or persistence models.
-
-## API structure
-
-- `/health/*` provides liveness and database-backed readiness.
-- `/api/v1/documents` is the versioned document collection.
-- Upload, list, detail, and content responses share typed Pydantic representations.
-- Request middleware adds a request ID, safe response headers, and structured duration logs.
-
-## Persistence and failure behavior
-
-PostgreSQL and filesystem storage are not a distributed transaction. Milestone 1 minimizes inconsistency by writing the file first and deleting it if the database transaction fails. A process crash in that narrow interval can leave an orphan file. A future maintenance task can reconcile storage keys against the database; introducing a queue or transaction coordinator is not justified yet.
-
-## Planned intelligence pipeline
-
-Milestone 2 adds a persisted ingestion state machine behind an application service:
-
-```text
-upload → classify candidate → OCR/extract → metadata proposal → human review
+```mermaid
+stateDiagram-v2
+    [*] --> queued: upload committed
+    queued --> claimed: SKIP LOCKED claim
+    claimed --> extracting
+    extracting --> ocr: deterministic decision
+    extracting --> normalizing: embedded text sufficient
+    ocr --> normalizing
+    normalizing --> completed: extraction + proposals committed
+    claimed --> queued: retry or recovery
+    extracting --> queued: retry or recovery
+    ocr --> queued: retry or recovery
+    normalizing --> queued: retry or recovery
+    claimed --> failed: attempts exhausted
+    extracting --> failed: attempts exhausted
+    ocr --> failed: attempts exhausted
+    normalizing --> failed: attempts exhausted
+    failed --> queued: bounded manual retry
 ```
 
-Provider choices remain open. OCRmyPDF, Tesseract, and PaddleOCR should be evaluated with a representative private test corpus. Intelligence later sits behind an `IntelligenceProvider` boundary supporting local Ollama and optional OpenAI-compatible APIs. Search begins with PostgreSQL full-text search; pgvector is considered only after a semantic retrieval use case is measured.
+`DocumentStatus` represents the user-facing lifecycle (`inbox`, `processing`, `needs_review`, `ready`, `archived`, `failed`). `IngestionJobState` represents worker execution. Valid transitions live in one testable state machine; every transition creates an `IngestionJobEvent` in the same transaction as the job change.
+
+Upload streams to a same-directory `.part` file, calculates SHA-256, enforces the byte limit, and atomically renames to a UUID key. The API then commits the document and queued job together. A normal database failure deletes the new final file. A process crash between rename and commit can leave a recoverable orphan, which reconciliation reports.
+
+## PostgreSQL queue
+
+The queue is durable and contains no in-memory source of truth. Claiming orders by `available_at`, creation time, and UUID, and uses `SELECT … FOR UPDATE SKIP LOCKED`; concurrent PostgreSQL workers cannot claim the same row. Claims record identity, timestamps, heartbeat, attempts, and an audit event.
+
+Failures retain a sanitized category/message. Attempts below the bound return to `queued` with explicit exponential delay; exhausted jobs become `failed`. On every poll, a worker reclaims active jobs whose heartbeat is older than `PDI_WORKER_JOB_TIMEOUT`. Extraction is idempotent at the database boundary because `document_extractions.document_id` is unique and retries update that record rather than append duplicates.
+
+## Extraction and OCR
+
+`ExtractionProvider` is deliberately small: support detection and asynchronous extraction. `ExtractionResult` includes normalized text, per-page text, page count, method, provider/version, warnings, language, and provider metadata. `DocumentExtraction` persists that provenance independently of document metadata.
+
+PyPDF handles digital PDFs. Text is normalized with Unicode NFKC, CRLF/CR conversion, trailing-space removal, maximum two consecutive newlines, and outer whitespace removal. OCR is required deterministically when non-whitespace text is below 40 characters per page or more than half the pages contain fewer than 10 characters.
+
+Image input can use an installed Tesseract executable when OCR is enabled. The subprocess receives explicit arguments, never uses a shell, and has a timeout. Without an available OCR engine, the worker persists an `ocr_candidate` extraction with warnings and still sends the document to review. Scanned-PDF OCR remains benchmark-ready rather than silently selecting an unmeasured engine.
+
+## Proposals and review
+
+Machine-derived proposals are stored in `metadata_proposals` with source, confidence, status, and confirmation time. They never overwrite canonical fields. The review UI presents the original, extraction excerpt, warnings, canonical values, and pending proposals. Confirmation writes title, date, life area, and document type, resolves proposals as accepted or superseded, and sets the document to `ready`. Rejection records a rejected proposal without altering canonical metadata.
+
+## Storage reconciliation
+
+`pdi storage reconcile` compares final files with database keys and reports orphan files, missing files, and stale `.part` uploads. It is a dry-run by default. `--cleanup` deletes only reported orphans and stale temporary files; it never deletes database records or fabricates missing originals.
+
+## API and pagination
+
+All consumer routes remain under `/api/v1`; health routes remain unversioned. Collection endpoints use zero-based `offset`, bounded `limit`, deterministic ordering, and a total count. UUIDs are opaque. M2 adds `/documents/{id}/text`, `/documents/{id}/retry`, and `/review` resources while preserving M1 contracts.
+
+## Future direction
+
+Milestone 3 may add deterministic and model-backed classification/extraction behind provider boundaries. PostgreSQL full-text search precedes any vector use. Atlas continues to consume only stable HTTP APIs.
 

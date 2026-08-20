@@ -1,6 +1,6 @@
 # PDI — Private Document Intelligence
 
-PDI is a fast, privacy-first document home designed for self-hosting on modest hardware. Milestone 1 provides a complete upload-to-preview slice for PDF, JPEG, and PNG files without OCR, AI, or external search infrastructure.
+PDI is a fast, privacy-first document system designed for self-hosting on modest hardware. Milestone 2 adds durable ingestion, embedded PDF text extraction, deterministic OCR decisions, provenance, and a human review queue without Redis or external AI.
 
 ## What works
 
@@ -10,6 +10,11 @@ PDI is a fast, privacy-first document home designed for self-hosting on modest h
 - Responsive Next.js interface with drag-and-drop upload progress
 - JSON request logging, readiness/liveness checks, and basic security headers
 - Docker Compose deployment with persistent PostgreSQL and document volumes
+- PostgreSQL-backed, auditable ingestion jobs with bounded retry and stale-claim recovery
+- Dedicated graceful worker with native PDF extraction and optional local Tesseract image OCR
+- Separate normalized extraction and machine-proposal records
+- Review UI for confirming title, date, life area, and document type
+- Dry-run storage reconciliation for orphan, missing, and stale temporary files
 
 ## Run with Docker
 
@@ -23,7 +28,7 @@ docker compose up --build
 
 Open [http://localhost:3000](http://localhost:3000). The API is available at [http://localhost:8000](http://localhost:8000), with interactive docs at `/docs`.
 
-The API container applies pending Alembic migrations before it starts. Uploaded documents and database records persist in the named `document_storage` and `postgres_data` volumes and therefore survive container restarts.
+The API container applies pending Alembic migrations before it starts. The worker starts after the API is healthy and processes the durable PostgreSQL queue. Uploaded documents, jobs, extraction, proposals, and canonical metadata persist in the named `document_storage` and `postgres_data` volumes and survive container restarts.
 
 Stop the application:
 
@@ -51,6 +56,13 @@ uv run alembic upgrade head
 uv run uvicorn pdi.main:app --reload
 ```
 
+In another terminal, start the worker:
+
+```bash
+cd apps/api
+uv run pdi-worker
+```
+
 In another terminal, run the frontend:
 
 ```bash
@@ -66,8 +78,8 @@ The safe development defaults expect PostgreSQL at `localhost:5432`, the API at 
 ```bash
 cd apps/api
 uv run pytest
-uv run ruff check .
-uv run ruff format --check .
+uv run ruff check . ../../scripts
+uv run ruff format --check . ../../scripts
 uv run mypy .
 
 cd ../web
@@ -79,7 +91,7 @@ cd ../..
 docker compose config
 ```
 
-Or use `make test`, `make lint`, `make format`, `make migrate`, `make up`, and `make down` on systems with Make installed.
+Or use `make test`, `make lint`, `make format`, `make migrate`, `make worker`, `make reconcile`, `make benchmark-ocr`, `make logs`, `make up`, and `make down` on systems with Make installed.
 
 ## API
 
@@ -91,6 +103,12 @@ Or use `make test`, `make lint`, `make format`, `make migrate`, `make up`, and `
 | `GET` | `/api/v1/documents` | List with `limit`, `offset`, `status`, and `life_area` filters |
 | `GET` | `/api/v1/documents/{id}` | Read document metadata |
 | `GET` | `/api/v1/documents/{id}/content` | Stream original content inline |
+| `GET` | `/api/v1/documents/{id}/text` | Read normalized text and extraction provenance |
+| `POST` | `/api/v1/documents/{id}/retry` | Queue bounded reprocessing |
+| `GET` | `/api/v1/review` | List documents awaiting confirmation |
+| `GET` | `/api/v1/review/{id}` | Read canonical metadata, proposals, extraction, and job state |
+| `POST` | `/api/v1/review/{id}/confirm` | Confirm/edit metadata and make the document ready |
+| `POST` | `/api/v1/review/{id}/reject` | Reject pending machine proposals |
 
 ## Repository map
 
@@ -98,11 +116,11 @@ Or use `make test`, `make lint`, `make format`, `make migrate`, `make up`, and `
 apps/api/       FastAPI application, migration, and tests
 apps/web/       Next.js application
 docs/           Architecture and security decisions
+scripts/        Reusable non-sensitive benchmark-corpus tooling
 .github/        Continuous integration
 compose.yaml    Complete local deployment
 ```
 
-Empty `packages`, `infra`, and `scripts` directories are intentionally omitted until a concrete shared package, infrastructure override, or reusable script is needed.
+Empty `packages` and `infra` directories are intentionally omitted until a concrete shared package or infrastructure override is needed.
 
-See [Architecture](docs/ARCHITECTURE.md) and [Security](docs/SECURITY.md). PDI is released under the [MIT License](LICENSE).
-
+See [Architecture](docs/ARCHITECTURE.md), [Ingestion](docs/INGESTION.md), [OCR benchmark](docs/OCR_BENCHMARK.md), [Security](docs/SECURITY.md), [Paperless migration](docs/PAPERLESS_MIGRATION.md), and [Atlas integration](docs/ATLAS_INTEGRATION.md). PDI is released under the [MIT License](LICENSE).
