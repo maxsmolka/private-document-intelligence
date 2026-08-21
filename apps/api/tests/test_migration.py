@@ -10,14 +10,28 @@ from pdi.ingestion.models import DocumentAsset, DocumentAssetKind
 from pdi.migration.paperless import (
     PaperlessFixtureSource,
     analyze,
+    diagnostic_value,
     dry_run,
     import_documents,
+    unsupported_handling,
     verify,
 )
 from pdi.operations.models import DocumentNote, DocumentTag, MigrationRun, Tag
 from pdi.storage.local import LocalStorageBackend
 
 FIXTURE = Path(__file__).parent / "fixtures" / "paperless" / "manifest.json"
+PRESERVED_METADATA = "preserved_metadata_and_canonical_metadata"
+WORKFLOW_HANDLING = f"{PRESERVED_METADATA}.migration.unsupported.workflow_state"
+
+
+def test_content_diagnostics_are_redacted_and_flag_search_gap() -> None:
+    value = "private OCR content"
+    diagnostic = diagnostic_value("content", value)
+    assert isinstance(diagnostic, dict)
+    assert diagnostic["redacted"] is True and "preview" not in diagnostic
+    handling, blocker = unsupported_handling("content")
+    assert handling == "preserved_under_migration_metadata_but_not_promoted_to_extraction_or_search"
+    assert blocker is True
 
 
 async def test_paperless_analyze_dry_run_import_resume_and_verify(
@@ -36,6 +50,28 @@ async def test_paperless_analyze_dry_run_import_resume_and_verify(
         "original_files": 2,
         "archived_files": 1,
         "unsupported_values": 1,
+        "unsupported_field_occurrences": 1,
+        "unsupported_fields": [
+            {
+                "field": "workflow_state",
+                "occurrences": 1,
+                "value_types": ["string"],
+                "migration_handling": WORKFLOW_HANDLING,
+                "preserved": True,
+                "cutover_blocker": False,
+            }
+        ],
+        "unsupported_details": [
+            {
+                "document_id": "101",
+                "field": "workflow_state",
+                "value": "completed",
+                "value_type": "string",
+                "migration_handling": WORKFLOW_HANDLING,
+                "preserved": True,
+                "cutover_blocker": False,
+            }
+        ],
         "potential_duplicate_ids": 0,
     }
     settings = Settings(env="test", storage_path=tmp_path / "storage", max_upload_size=10_000)

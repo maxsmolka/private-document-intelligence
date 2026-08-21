@@ -211,10 +211,92 @@ def mapped_metadata(
     }
 
 
+def json_type(value: Any) -> str:
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, int):
+        return "integer"
+    if isinstance(value, float):
+        return "number"
+    if isinstance(value, str):
+        return "string"
+    if isinstance(value, list):
+        return "array"
+    if isinstance(value, dict):
+        return "object"
+    return type(value).__name__
+
+
+def diagnostic_value(field: str, value: Any) -> Any:
+    if field == "content" and isinstance(value, str):
+        return {
+            "redacted": True,
+            "characters": len(value),
+            "sha256": hashlib.sha256(value.encode()).hexdigest(),
+        }
+    if isinstance(value, str) and len(value) > 500:
+        return {
+            "preview": value[:500],
+            "truncated": True,
+            "characters": len(value),
+            "sha256": hashlib.sha256(value.encode()).hexdigest(),
+        }
+    return value
+
+
+def unsupported_handling(field: str) -> tuple[str, bool]:
+    if field == "content":
+        return (
+            "preserved_under_migration_metadata_but_not_promoted_to_extraction_or_search",
+            True,
+        )
+    return (
+        f"preserved_metadata_and_canonical_metadata.migration.unsupported.{field}",
+        False,
+    )
+
+
 async def analyze(source: PaperlessSource) -> dict[str, Any]:
     catalogs = await source.catalogs()
     documents = [document async for document in source.documents()]
     mapped = [mapped_metadata(document, catalogs) for document in documents]
+    unsupported_details = []
+    for document, metadata in zip(documents, mapped, strict=True):
+        for field, value in sorted(metadata["unsupported"].items()):
+            handling, cutover_blocker = unsupported_handling(field)
+            unsupported_details.append(
+                {
+                    "document_id": str(document["id"]),
+                    "field": field,
+                    "value": diagnostic_value(field, value),
+                    "value_type": json_type(value),
+                    "migration_handling": handling,
+                    "preserved": True,
+                    "cutover_blocker": cutover_blocker,
+                }
+            )
+    unsupported_fields: dict[str, dict[str, Any]] = {}
+    for detail in unsupported_details:
+        field = str(detail["field"])
+        summary = unsupported_fields.setdefault(
+            field,
+            {
+                "field": field,
+                "occurrences": 0,
+                "value_types": set(),
+                "migration_handling": detail["migration_handling"],
+                "preserved": True,
+                "cutover_blocker": detail["cutover_blocker"],
+            },
+        )
+        summary["occurrences"] += 1
+        summary["value_types"].add(detail["value_type"])
+    field_summaries = []
+    for summary in unsupported_fields.values():
+        summary["value_types"] = sorted(summary["value_types"])
+        field_summaries.append(summary)
     return {
         "source_version": await source.version(),
         "documents": len(documents),
@@ -232,6 +314,9 @@ async def analyze(source: PaperlessSource) -> dict[str, Any]:
             for document in documents
         ),
         "unsupported_values": sum(bool(value["unsupported"]) for value in mapped),
+        "unsupported_field_occurrences": len(unsupported_details),
+        "unsupported_fields": sorted(field_summaries, key=lambda value: str(value["field"])),
+        "unsupported_details": unsupported_details,
         "potential_duplicate_ids": len(documents) - len({str(value["id"]) for value in documents}),
     }
 
