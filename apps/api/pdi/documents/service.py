@@ -57,6 +57,12 @@ async def create_document(
     filename, mime_type = await validate_upload(file)
     storage_key = f"{uuid.uuid4()}{EXTENSIONS[mime_type]}"
     stored = await storage.store(storage_key, file, max_size)
+    existing = await session.scalar(
+        select(Document).where(Document.sha256 == stored.sha256).order_by(Document.created_at)
+    )
+    if existing is not None:
+        await storage.delete(stored.key)
+        return existing
     return await persist_stored_document(
         session,
         storage,

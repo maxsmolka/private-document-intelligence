@@ -83,10 +83,13 @@ async def organizations(
     statement = select(Organization).where(Organization.status == organization_status)
     if q.strip():
         pattern = f"%{q.strip()}%"
-        statement = statement.outerjoin(OrganizationAlias).where(
-            or_(Organization.canonical_name.ilike(pattern), OrganizationAlias.alias.ilike(pattern))
+        alias_matches = select(OrganizationAlias.organization_id).where(
+            OrganizationAlias.alias.ilike(pattern)
         )
-    statement = statement.distinct().order_by(Organization.canonical_name, Organization.id)
+        statement = statement.where(
+            or_(Organization.canonical_name.ilike(pattern), Organization.id.in_(alias_matches))
+        )
+    statement = statement.order_by(Organization.canonical_name, Organization.id)
     items, total = await page(session, statement, limit, offset)
     return OrganizationList(
         items=[OrganizationRead.model_validate(item) for item in items],

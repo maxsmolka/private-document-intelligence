@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { publicApiUrl } from "@/lib/api/documents";
+import { browserApiUrl } from "@/lib/api/documents";
 
 export default function LoginPage() {
   const [error, setError] = useState("");
@@ -9,7 +9,7 @@ export default function LoginPage() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError("");
     const data = new FormData(event.currentTarget);
-    const response = await fetch(`${publicApiUrl()}/api/v1/auth/login`, {
+    const response = await fetch(browserApiUrl("/api/v1/auth/login"), {
       method: "POST", credentials: "include", headers: { "content-type": "application/json" },
       body: JSON.stringify({ username: data.get("username"), password: data.get("password") }),
     }).catch(() => null);

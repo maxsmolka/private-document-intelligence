@@ -1,7 +1,9 @@
 import "server-only";
 import { cookies } from "next/headers";
-import type {
-  DocumentListResponse, DocumentRecord, ExtractionHistory, ReviewDetail, ReviewListResponse, SearchResponse,
+import {
+  ApiError,
+  type DocumentListResponse, type DocumentRecord, type ExtractionHistory, type ReviewDetail,
+  type ReviewListResponse, type SearchResponse,
 } from "./documents";
 import type {
   ActionItem, Contract, ContractDetail, Deadline, KnowledgeProposal, Organization,
@@ -17,7 +19,7 @@ async function serverRequest<T>(path: string): Promise<T> {
     cache: "no-store",
     headers: cookie ? { cookie } : undefined,
   });
-  if (!response.ok) throw new Error(`PDI API returned ${response.status}`);
+  if (!response.ok) throw new ApiError(response.status, `PDI API returned ${response.status}`);
   return response.json() as Promise<T>;
 }
 

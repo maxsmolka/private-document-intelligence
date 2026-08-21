@@ -16,6 +16,7 @@ from pdi.knowledge.extraction import generate_knowledge_proposals, normalize_nam
 from pdi.knowledge.models import (
     Contract,
     DeadlineStatus,
+    KnowledgeHistory,
     KnowledgeProposalType,
     Organization,
     OrganizationAlias,
@@ -234,6 +235,28 @@ async def test_exact_alias_match_suggests_link_without_auto_merge(
         assert candidate.possible_existing_organization_id == organization.id
         assert candidate.match_reason == "exact normalized name or alias"
         assert organization.status == OrganizationStatus.ACTIVE
+
+
+async def test_rejected_knowledge_proposal_is_audited(
+    client: AsyncClient, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    async with session_factory() as session:
+        document, extraction, run = await seed_run(session, "reject")
+        proposals = await generate_knowledge_proposals(
+            session, document=document, extraction=extraction, run=run
+        )
+        await session.commit()
+        proposal = proposals[0]
+
+    response = await client.post(f"/api/v1/knowledge/review/{proposal.id}/reject")
+    assert response.status_code == 200
+    assert response.json()["status"] == "rejected"
+    async with session_factory() as session:
+        history = await session.scalar(
+            select(KnowledgeHistory).where(KnowledgeHistory.source_proposal_id == proposal.id)
+        )
+        assert history is not None
+        assert history.action == "rejected"
 
 
 async def test_organization_merge_preserves_aliases_and_reassigns_references(

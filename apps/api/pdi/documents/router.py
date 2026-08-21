@@ -198,6 +198,7 @@ async def promote_document_extraction(
     extraction_id: UUID,
     values: ExtractionPromotionRequest,
     session: Session,
+    settings: AppSettings,
 ) -> ExtractionPromotionRead:
     promotion = await promote_extraction(
         session,
@@ -207,6 +208,8 @@ async def promote_document_extraction(
         actor="user",
         reason=values.reason,
     )
+    document = await get_document(session, document_id)
+    await retry_document_job(session, document, settings.worker_max_attempts)
     return ExtractionPromotionRead.model_validate(promotion)
 
 

@@ -2,9 +2,10 @@ import { ArrowLeft, CalendarDays, Database, FileText, Hash } from "lucide-react"
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { RetryProcessingButton } from "@/components/retry-processing-button";
+import { DocumentPreview } from "@/components/document-preview";
 import { ExtractionReviewPanel } from "@/components/extraction-review-panel";
-import { ApiError, documentContentUrl } from "@/lib/api/documents";
+import { RetryProcessingButton } from "@/components/retry-processing-button";
+import { ApiError } from "@/lib/api/documents";
 import { getDocument, getExtractionHistory } from "@/lib/api/server";
 
 function label(value: string) {
@@ -46,11 +47,10 @@ export default async function DocumentDetailPage({
 }) {
   const { id } = await params;
   const [document, extractionHistory] = await Promise.all([load(id), getExtractionHistory(id)]);
-  const contentUrl = documentContentUrl(document.id);
   const metadata = [
     [FileText, "Filename", document.original_filename],
     [Database, "File size", fileSize(document.file_size)],
-    [CalendarDays, "Added", new Date(document.created_at).toLocaleString()],
+    [CalendarDays, "Added", new Intl.DateTimeFormat("de-DE", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Berlin" }).format(new Date(document.created_at))],
     [Hash, "SHA-256", document.sha256],
   ] as const;
 
@@ -82,9 +82,9 @@ export default async function DocumentDetailPage({
       {document.status === "failed" ? (
         <div className="mt-6 flex flex-col justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center">
           <div>
-            <p className="text-sm font-medium text-amber-900">OCR failed</p>
+            <p className="text-sm font-medium text-amber-900">Processing failed</p>
             <p className="mt-1 text-xs text-amber-700">
-              The original is safe. Check the OCR provider or resource limits, then retry.
+              The original is safe. Check the local processing configuration, then retry.
             </p>
           </div>
           <RetryProcessingButton documentId={document.id} />
@@ -116,21 +116,7 @@ export default async function DocumentDetailPage({
           <div className="flex h-11 items-center border-b border-stone-200 bg-white px-4 text-xs font-medium text-stone-500">
             File preview
           </div>
-          {document.mime_type.startsWith("image/") ? (
-            <div className="grid min-h-[calc(68vh-2.75rem)] place-items-center p-5">
-              <img
-                src={contentUrl}
-                alt={`Preview of ${document.title}`}
-                className="max-h-[62vh] max-w-full rounded shadow-lg"
-              />
-            </div>
-          ) : (
-            <iframe
-              src={contentUrl}
-              title={`Preview of ${document.title}`}
-              className="h-[calc(68vh-2.75rem)] w-full border-0"
-            />
-          )}
+          <DocumentPreview documentId={document.id} mimeType={document.mime_type} title={document.title} heightClass="min-h-[calc(68vh-2.75rem)] h-[calc(68vh-2.75rem)]" />
         </section>
       </div>
     </div>

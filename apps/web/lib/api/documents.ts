@@ -159,7 +159,7 @@ export interface MetadataProposal {
 export interface DocumentAsset {
   id: string;
   document_id: string;
-  kind: "original" | "ocr_pdf";
+  kind: "original" | "ocr_pdf" | "migrated_archive";
   mime_type: string;
   file_size: number;
   sha256: string;
@@ -272,8 +272,8 @@ function serverApiUrl() {
   return process.env.PDI_API_INTERNAL_URL ?? process.env.NEXT_PUBLIC_PDI_API_URL ?? "http://localhost:8000";
 }
 
-export function publicApiUrl() {
-  return process.env.NEXT_PUBLIC_PDI_API_URL ?? "http://localhost:8000";
+export function browserApiUrl(path: string) {
+  return `/api/pdi${path}`;
 }
 
 export async function request<T>(path: string): Promise<T> {
@@ -284,7 +284,7 @@ export async function request<T>(path: string): Promise<T> {
 
 export async function mutate<T>(path: string, body?: object): Promise<T> {
   const csrf = document.cookie.split("; ").find((value) => value.startsWith("pdi_csrf="))?.split("=")[1];
-  const response = await fetch(`${publicApiUrl()}${path}`, {
+  const response = await fetch(browserApiUrl(path), {
     method: "POST",
     credentials: "include",
     headers: { "content-type": "application/json", ...(csrf ? { "x-csrf-token": decodeURIComponent(csrf) } : {}) },
@@ -386,5 +386,5 @@ export function keepCurrentExtraction(documentId: string, comparisonId: string) 
 }
 
 export function documentContentUrl(id: string) {
-  return `${publicApiUrl()}/api/v1/documents/${encodeURIComponent(id)}/content`;
+  return browserApiUrl(`/api/v1/documents/${encodeURIComponent(id)}/content`);
 }

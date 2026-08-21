@@ -60,6 +60,17 @@ async def test_rejects_oversized_upload(client: AsyncClient) -> None:
     assert response.status_code == 413
 
 
+async def test_duplicate_upload_returns_existing_document_without_extra_storage(
+    client: AsyncClient, tmp_path: Path
+) -> None:
+    first = await upload(client, "first.pdf")
+    duplicate = await upload(client, "duplicate-name.pdf")
+
+    assert duplicate["id"] == first["id"]
+    assert duplicate["original_filename"] == "first.pdf"
+    assert len(list((tmp_path / "storage").glob("*.pdf"))) == 1
+
+
 async def test_list_detail_content_and_missing_document(client: AsyncClient) -> None:
     first = await upload(client, "first.pdf")
     second = await client.post(

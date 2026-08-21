@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { DragEvent, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { DocumentRecord } from "@/lib/api/documents";
-import { publicApiUrl } from "@/lib/api/documents";
+import { browserApiUrl } from "@/lib/api/documents";
 
 type UploadState = "idle" | "uploading" | "success" | "error";
 const ACCEPTED = ["application/pdf", "image/jpeg", "image/png"];
@@ -33,7 +33,7 @@ export function UploadDialog() {
     setFilename(file.name); setState("uploading"); setProgress(0); setError("");
     const body = new FormData(); body.append("file", file);
     const request = new XMLHttpRequest();
-    request.open("POST", `${publicApiUrl()}/api/v1/documents`);
+    request.open("POST", browserApiUrl("/api/v1/documents"));
     request.withCredentials = true;
     const csrf = document.cookie.split("; ").find((value) => value.startsWith("pdi_csrf="))?.split("=")[1];
     if (csrf) request.setRequestHeader("x-csrf-token", decodeURIComponent(csrf));

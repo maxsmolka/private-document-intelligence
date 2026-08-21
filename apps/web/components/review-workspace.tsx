@@ -4,11 +4,11 @@ import { AlertTriangle, ArrowRight, Check, FileText, Pencil, RotateCcw, Sparkles
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useMemo, useState } from "react";
+import { DocumentPreview } from "@/components/document-preview";
 import { Button } from "@/components/ui/button";
 import {
   acceptProposal,
   confirmReview,
-  documentContentUrl,
   rejectReview,
   rejectProposal,
   retryDocument,
@@ -55,14 +55,24 @@ export function ReviewWorkspace({ detail, queue }: { detail: ReviewDetail; queue
   async function decide(proposal: MetadataProposal, action: "accept" | "reject", value?: string) {
     setBusy(proposal.id); setError("");
     try {
-      if (action === "accept") await acceptProposal(document.id, proposal.id, value);
-      else await rejectProposal(document.id, proposal.id);
+      if (action === "accept") {
+        await acceptProposal(document.id, proposal.id, value);
+        const accepted = value ?? proposal.normalized_value ?? proposal.proposed_value;
+        if (["title", "document_date", "life_area", "document_type"].includes(proposal.field_name)) {
+          setValues((current) => ({ ...current, [proposal.field_name]: accepted }));
+        }
+      } else {
+        await rejectProposal(document.id, proposal.id);
+        if (["title", "document_date", "life_area", "document_type"].includes(proposal.field_name)) {
+          setValues((current) => ({ ...current, [proposal.field_name]: document[proposal.field_name as keyof typeof document] }));
+        }
+      }
       router.refresh(); setBusy(null);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not update proposal"); setBusy(null); }
   }
 
   return <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_390px]">
-    <section className="min-h-[72vh] overflow-hidden rounded-2xl border border-stone-200 bg-stone-100 shadow-sm"><div className="flex h-12 items-center justify-between border-b border-stone-200 bg-white px-4"><span className="text-xs font-medium text-stone-500">Original document</span><Link href={`/documents/${document.id}`} className="text-xs text-stone-400 hover:text-stone-700">Open details</Link></div>{document.mime_type.startsWith("image/") ? <div className="grid min-h-[calc(72vh-3rem)] place-items-center p-5"><img src={documentContentUrl(document.id)} alt={`Preview of ${document.title}`} className="max-h-[66vh] max-w-full rounded shadow-xl" /></div> : <iframe src={documentContentUrl(document.id)} title={`Preview of ${document.title}`} className="h-[calc(72vh-3rem)] w-full border-0" />}</section>
+    <section className="min-h-[72vh] overflow-hidden rounded-2xl border border-stone-200 bg-stone-100 shadow-sm"><div className="flex h-12 items-center justify-between border-b border-stone-200 bg-white px-4"><span className="text-xs font-medium text-stone-500">Original document</span><Link href={`/documents/${document.id}`} className="text-xs text-stone-400 hover:text-stone-700">Open details</Link></div><DocumentPreview documentId={document.id} mimeType={document.mime_type} title={document.title} heightClass="min-h-[calc(72vh-3rem)] h-[calc(72vh-3rem)]" /></section>
     <form onSubmit={confirm} className="space-y-5"><div><div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-stone-400"><Sparkles className="size-3.5" />Review metadata</div><h2 className="mt-2 text-xl font-semibold tracking-tight text-stone-950">Confirm what PDI found</h2><p className="mt-1 text-sm leading-6 text-stone-500">Machine proposals never replace canonical metadata until you save.</p></div>
       {detail.extraction?.warnings.length ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-3"><div className="flex gap-2 text-xs font-medium text-amber-800"><AlertTriangle className="mt-0.5 size-3.5" />Processing notes</div><ul className="mt-2 space-y-1 text-xs text-amber-700">{detail.extraction.warnings.map((warning) => <li key={warning}>{label(warning)}</li>)}</ul></div> : null}
       <div className="space-y-4 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">

@@ -3,6 +3,7 @@
 import { LogOut, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { browserApiUrl } from "@/lib/api/documents";
 
 export function Topbar() {
   const router = useRouter();
@@ -37,7 +38,7 @@ export function Topbar() {
   }
   async function logout() {
     const csrf = document.cookie.split("; ").find((value) => value.startsWith("pdi_csrf="))?.split("=")[1];
-    await fetch(`${process.env.NEXT_PUBLIC_PDI_API_URL ?? "http://localhost:8000"}/api/v1/auth/logout`, {
+    await fetch(browserApiUrl("/api/v1/auth/logout"), {
       method: "POST", credentials: "include", headers: csrf ? { "x-csrf-token": decodeURIComponent(csrf) } : {},
     });
     router.replace("/login");

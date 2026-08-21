@@ -438,6 +438,14 @@ async def reject_knowledge_proposal(
     proposal = await proposal_for_review(session, proposal_id)
     proposal.status = ProposalStatus.REJECTED
     proposal.resolved_at = datetime.now(UTC)
+    audit(
+        session,
+        resource_type=f"{proposal.proposal_type.value}_proposal",
+        resource_id=proposal.id,
+        action="rejected",
+        proposal=proposal,
+        new_value={"status": ProposalStatus.REJECTED.value},
+    )
     await session.commit()
     return proposal
 

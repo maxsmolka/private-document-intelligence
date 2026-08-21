@@ -23,8 +23,8 @@ function Version({ item, title }: { item: ExtractionVersion; title: string }) {
       <dl className="mt-3 grid grid-cols-2 gap-2 text-xs text-stone-500">
         <dt>Source</dt><dd className="text-right text-stone-700">{item.source}</dd>
         <dt>Pages</dt><dd className="text-right text-stone-700">{item.page_count}</dd>
-        <dt>Characters</dt><dd className="text-right text-stone-700">{item.character_count.toLocaleString()}</dd>
-        <dt>Created</dt><dd className="text-right text-stone-700">{new Date(item.created_at).toLocaleDateString()}</dd>
+        <dt>Characters</dt><dd className="text-right text-stone-700">{item.character_count.toLocaleString("de-DE")}</dd>
+        <dt>Created</dt><dd className="text-right text-stone-700">{new Intl.DateTimeFormat("de-DE", { dateStyle: "medium", timeZone: "Europe/Berlin" }).format(new Date(item.created_at))}</dd>
       </dl>
       {item.warnings.length ? <p className="mt-3 text-xs text-amber-700">{item.warnings.join(" · ")}</p> : null}
     </div>
