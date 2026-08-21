@@ -6,7 +6,12 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from pdi.documents.models import LifeArea
 from pdi.documents.schemas import DocumentRead
-from pdi.ingestion.models import DocumentAssetKind, IngestionJobState, ProposalStatus
+from pdi.ingestion.models import (
+    DocumentAssetKind,
+    ExtractionComparisonStatus,
+    IngestionJobState,
+    ProposalStatus,
+)
 from pdi.intelligence.schemas import CanonicalMetadataHistoryRead, IntelligenceRunRead
 
 
@@ -31,18 +36,87 @@ class ExtractionRead(BaseModel):
 
     id: UUID
     document_id: UUID
+    source: str
     provider: str
     provider_version: str
     method: str
     text: str
+    normalized_text: str
     page_count: int
     pages: list[str]
     language: str | None
     content_hash: str
     warnings: list[str]
     extraction_metadata: dict[str, object]
+    source_provenance: dict[str, object]
     created_at: datetime
     updated_at: datetime
+
+
+class ExtractionVersionRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    document_id: UUID
+    source: str
+    provider: str
+    provider_version: str
+    method: str
+    page_count: int
+    language: str | None
+    content_hash: str
+    normalized_content_hash: str
+    character_count: int
+    warnings: list[str]
+    source_provenance: dict[str, object]
+    created_at: datetime
+    canonical: bool
+
+
+class ExtractionComparisonRequest(BaseModel):
+    baseline_extraction_id: UUID
+    candidate_extraction_id: UUID
+
+
+class ExtractionComparisonRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    document_id: UUID
+    baseline_extraction_id: UUID
+    candidate_extraction_id: UUID
+    status: ExtractionComparisonStatus
+    metrics: dict[str, object]
+    review_decision: str | None
+    reviewed_by: str | None
+    reviewed_at: datetime | None
+    created_at: datetime
+
+
+class ExtractionPromotionRequest(BaseModel):
+    comparison_id: UUID | None = None
+    reason: str = Field(default="user_review", min_length=1, max_length=255)
+
+
+class ExtractionPromotionRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    document_id: UUID
+    previous_extraction_id: UUID | None
+    promoted_extraction_id: UUID
+    comparison_id: UUID | None
+    reason: str
+    actor: str
+    reanalysis_required: bool
+    created_at: datetime
+
+
+class ExtractionHistoryRead(BaseModel):
+    canonical_extraction_id: UUID | None
+    versions: list[ExtractionVersionRead]
+    comparisons: list[ExtractionComparisonRead]
+    promotions: list[ExtractionPromotionRead]
 
 
 class DocumentAssetRead(BaseModel):

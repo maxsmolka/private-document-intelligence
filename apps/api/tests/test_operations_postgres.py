@@ -7,8 +7,10 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from pdi.documents.models import Document, DocumentStatus, LifeArea
-from pdi.ingestion.models import DocumentAsset, DocumentAssetKind
+from pdi.ingestion.models import DocumentAsset, DocumentAssetKind, DocumentExtraction
+from pdi.ingestion.versions import create_extraction_version
 from pdi.operations.backup import create_backup, restore_backup, verify_backup
+from pdi.search.service import rebuild_search_index, refresh_search_index, verify_search_index
 from pdi.storage.local import LocalStorageBackend
 
 
@@ -63,6 +65,41 @@ async def test_real_postgresql_backup_fresh_restore_and_asset_hashes(
             )
         )
         session.add(document)
+        await session.flush()
+        legacy, _ = await create_extraction_version(
+            session,
+            document_id=document.id,
+            source="paperless_migration",
+            provider="paperless_ngx",
+            provider_version="2.18.4",
+            method="legacy_ocr_content",
+            text="Legacy searchable restore text",
+            page_count=1,
+            pages=["Legacy searchable restore text"],
+            language=None,
+            warnings=[],
+            provider_metadata={},
+            source_provenance={"paperless_document_id": "10"},
+            identity_components={"paperless_document_id": "10"},
+        )
+        canonical, _ = await create_extraction_version(
+            session,
+            document_id=document.id,
+            source="pdi",
+            provider="pypdf",
+            provider_version="6",
+            method="native_pdf",
+            text="Canonical searchable restore text",
+            page_count=1,
+            pages=["Canonical searchable restore text"],
+            language=None,
+            warnings=[],
+            provider_metadata={},
+            source_provenance={"document_sha256": digest},
+            identity_components={"document_sha256": digest},
+        )
+        document.canonical_extraction_id = canonical.id
+        await refresh_search_index(session, document, canonical)
         await session.commit()
         backup = tmp_path / "backup"
         await create_backup(
@@ -95,6 +132,18 @@ async def test_real_postgresql_backup_fresh_restore_and_asset_hashes(
             assert await session.scalar(select(func.count()).select_from(Document)) == 1
             restored = await session.scalar(select(Document))
             assert restored is not None and restored.canonical_metadata == {"restored": True}
+            extractions = list(
+                await session.scalars(
+                    select(DocumentExtraction).order_by(DocumentExtraction.created_at)
+                )
+            )
+            assert len(extractions) == 2
+            assert restored.canonical_extraction_id == canonical.id
+            restored_legacy = next(item for item in extractions if item.id == legacy.id)
+            assert restored_legacy.source_provenance["paperless_document_id"] == "10"
+            assert (await verify_search_index(session)).stale == 0
+            await rebuild_search_index(session)
+            assert (await verify_search_index(session)).stale == 0
             assert restore_storage.path_for(restored.storage_key).read_bytes() == payload
     finally:
         await restore_engine.dispose()

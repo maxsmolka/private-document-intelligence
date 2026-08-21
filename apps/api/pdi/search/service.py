@@ -109,7 +109,13 @@ def canonical_field_values(document: Document, field_name: str) -> list[str]:
 
 
 def search_values(document: Document, extraction: DocumentExtraction | None = None) -> SearchValues:
-    active_extraction = extraction
+    active_extraction = (
+        extraction
+        if extraction is not None
+        else document.canonical_extraction
+        if document.canonical_extraction_id is not None
+        else None
+    )
     organizations = canonical_field_values(document, "organization")
     identifiers = canonical_field_values(document, "identifier")
     metadata = [
@@ -123,7 +129,7 @@ def search_values(document: Document, extraction: DocumentExtraction | None = No
     organization_text = "\n".join(dict.fromkeys(organizations))
     identifier_text = "\n".join(dict.fromkeys(identifiers))
     metadata_text = "\n".join(item for item in dict.fromkeys(metadata) if item)
-    body = active_extraction.text if active_extraction else ""
+    body = active_extraction.normalized_text if active_extraction else ""
     pages = active_extraction.pages if active_extraction else []
     extraction_content_hash = active_extraction.content_hash if active_extraction else None
     fields = {
@@ -207,7 +213,9 @@ async def rebuild_search_index(session: AsyncSession) -> SearchMaintenance:
     documents = list(
         (
             await session.scalars(
-                select(Document).options(selectinload(Document.extraction)).order_by(Document.id)
+                select(Document)
+                .options(selectinload(Document.canonical_extraction))
+                .order_by(Document.id)
             )
         ).all()
     )
@@ -215,10 +223,13 @@ async def rebuild_search_index(session: AsyncSession) -> SearchMaintenance:
     for document in documents:
         current = await session.get(SearchDocument, document.id)
         before = current.search_content_hash if current else None
-        _, was_created = await refresh_search_index(session, document, document.extraction)
+        _, was_created = await refresh_search_index(
+            session, document, document.canonical_extraction
+        )
         created += was_created
         updated += (
-            not was_created and before != search_values(document, document.extraction).content_hash
+            not was_created
+            and before != search_values(document, document.canonical_extraction).content_hash
         )
     await session.commit()
     return SearchMaintenance(
@@ -230,7 +241,9 @@ async def verify_search_index(session: AsyncSession) -> SearchMaintenance:
     documents = list(
         (
             await session.scalars(
-                select(Document).options(selectinload(Document.extraction)).order_by(Document.id)
+                select(Document)
+                .options(selectinload(Document.canonical_extraction))
+                .order_by(Document.id)
             )
         ).all()
     )
@@ -243,7 +256,8 @@ async def verify_search_index(session: AsyncSession) -> SearchMaintenance:
         if indexed is None:
             missing += 1
         elif (
-            indexed.search_content_hash != search_values(document, document.extraction).content_hash
+            indexed.search_content_hash
+            != search_values(document, document.canonical_extraction).content_hash
         ):
             stale += 1
     return SearchMaintenance(

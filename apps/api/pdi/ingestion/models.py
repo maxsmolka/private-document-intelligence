@@ -1,3 +1,4 @@
+import hashlib
 import uuid
 from datetime import datetime
 from enum import StrEnum
@@ -45,6 +46,11 @@ class IntelligenceRunStatus(StrEnum):
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+
+
+class ExtractionComparisonStatus(StrEnum):
+    EQUIVALENT = "equivalent"
+    REVIEW_REQUIRED = "review_required"
 
 
 class DocumentAssetKind(StrEnum):
@@ -145,26 +151,98 @@ class IngestionJobEvent(Base):
 
 class DocumentExtraction(Base):
     __tablename__ = "document_extractions"
+    __table_args__ = (
+        UniqueConstraint("identity_key", name="uq_document_extractions_identity_key"),
+        Index("ix_document_extractions_document_created", "document_id", "created_at"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     document_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("documents.id", ondelete="CASCADE"), unique=True, nullable=False
+        ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
     )
+    source: Mapped[str] = mapped_column(String(100), default="pdi")
     provider: Mapped[str] = mapped_column(String(100))
     provider_version: Mapped[str] = mapped_column(String(100))
     method: Mapped[str] = mapped_column(String(50))
     text: Mapped[str] = mapped_column(Text)
+    normalized_text: Mapped[str] = mapped_column(
+        Text, default=lambda context: str(context.get_current_parameters().get("text", ""))
+    )
     page_count: Mapped[int] = mapped_column(Integer)
     pages: Mapped[list[str]] = mapped_column(JSON, default=list)
     language: Mapped[str | None] = mapped_column(String(30), nullable=True)
     content_hash: Mapped[str] = mapped_column(String(64))
+    identity_key: Mapped[str] = mapped_column(
+        String(64), default=lambda: hashlib.sha256(uuid.uuid4().bytes).hexdigest()
+    )
     warnings: Mapped[list[str]] = mapped_column(JSON, default=list)
     extraction_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    source_provenance: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    document: Mapped["Document"] = relationship(back_populates="extraction")
+    document: Mapped["Document"] = relationship(
+        back_populates="extractions", foreign_keys=[document_id]
+    )
+
+
+class ExtractionComparison(Base):
+    __tablename__ = "extraction_comparisons"
+    __table_args__ = (
+        UniqueConstraint(
+            "baseline_extraction_id",
+            "candidate_extraction_id",
+            name="uq_extraction_comparisons_pair",
+        ),
+        Index("ix_extraction_comparisons_document", "document_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
+    baseline_extraction_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("document_extractions.id", ondelete="CASCADE"), nullable=False
+    )
+    candidate_extraction_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("document_extractions.id", ondelete="CASCADE"), nullable=False
+    )
+    status: Mapped[ExtractionComparisonStatus] = mapped_column(
+        Enum(
+            ExtractionComparisonStatus,
+            name="extraction_comparison_status",
+            values_callable=lambda values: [value.value for value in values],
+        )
+    )
+    metrics: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    review_decision: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    reviewed_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ExtractionPromotion(Base):
+    __tablename__ = "extraction_promotions"
+    __table_args__ = (Index("ix_extraction_promotions_document", "document_id", "created_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
+    previous_extraction_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("document_extractions.id", ondelete="SET NULL"), nullable=True
+    )
+    promoted_extraction_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("document_extractions.id", ondelete="RESTRICT"), nullable=False
+    )
+    comparison_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("extraction_comparisons.id", ondelete="SET NULL"), nullable=True
+    )
+    reason: Mapped[str] = mapped_column(String(255), nullable=False)
+    actor: Mapped[str] = mapped_column(String(100), nullable=False)
+    reanalysis_required: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class IntelligenceRun(Base):

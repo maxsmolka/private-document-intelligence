@@ -1,8 +1,10 @@
+import hashlib
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pdi.core.config import Settings, get_settings
@@ -10,9 +12,28 @@ from pdi.core.database import get_session
 from pdi.documents.models import DocumentStatus, LifeArea
 from pdi.documents.schemas import DocumentList, DocumentRead
 from pdi.documents.service import create_document, get_document, list_documents
+from pdi.ingestion.models import (
+    DocumentExtraction,
+    ExtractionComparison,
+    ExtractionPromotion,
+)
 from pdi.ingestion.queue import retry_document_job
 from pdi.ingestion.review import extraction_for
-from pdi.ingestion.schemas import ExtractionRead, IngestionJobRead
+from pdi.ingestion.schemas import (
+    ExtractionComparisonRead,
+    ExtractionComparisonRequest,
+    ExtractionHistoryRead,
+    ExtractionPromotionRead,
+    ExtractionPromotionRequest,
+    ExtractionRead,
+    ExtractionVersionRead,
+    IngestionJobRead,
+)
+from pdi.ingestion.versions import (
+    compare_extractions,
+    keep_current_extraction,
+    promote_extraction,
+)
 from pdi.storage.base import StorageBackend
 from pdi.storage.dependencies import get_storage
 
@@ -81,6 +102,112 @@ async def document_text(document_id: UUID, session: Session) -> ExtractionRead:
     if extraction is None:
         raise HTTPException(status_code=404, detail="Document extraction not found")
     return ExtractionRead.model_validate(extraction)
+
+
+@router.get("/{document_id}/extractions", response_model=ExtractionHistoryRead)
+async def extraction_history(document_id: UUID, session: Session) -> ExtractionHistoryRead:
+    document = await get_document(session, document_id)
+    versions = list(
+        (
+            await session.scalars(
+                select(DocumentExtraction)
+                .where(DocumentExtraction.document_id == document_id)
+                .order_by(DocumentExtraction.created_at, DocumentExtraction.id)
+            )
+        ).all()
+    )
+    comparisons = list(
+        (
+            await session.scalars(
+                select(ExtractionComparison)
+                .where(ExtractionComparison.document_id == document_id)
+                .order_by(ExtractionComparison.created_at, ExtractionComparison.id)
+            )
+        ).all()
+    )
+    promotions = list(
+        (
+            await session.scalars(
+                select(ExtractionPromotion)
+                .where(ExtractionPromotion.document_id == document_id)
+                .order_by(ExtractionPromotion.created_at, ExtractionPromotion.id)
+            )
+        ).all()
+    )
+    return ExtractionHistoryRead(
+        canonical_extraction_id=document.canonical_extraction_id,
+        versions=[
+            ExtractionVersionRead(
+                id=item.id,
+                document_id=item.document_id,
+                source=item.source,
+                provider=item.provider,
+                provider_version=item.provider_version,
+                method=item.method,
+                page_count=item.page_count,
+                language=item.language,
+                content_hash=item.content_hash,
+                normalized_content_hash=hashlib.sha256(item.normalized_text.encode()).hexdigest(),
+                character_count=len(item.normalized_text),
+                warnings=item.warnings,
+                source_provenance=item.source_provenance,
+                created_at=item.created_at,
+                canonical=item.id == document.canonical_extraction_id,
+            )
+            for item in versions
+        ],
+        comparisons=[ExtractionComparisonRead.model_validate(item) for item in comparisons],
+        promotions=[ExtractionPromotionRead.model_validate(item) for item in promotions],
+    )
+
+
+@router.post("/{document_id}/extractions/compare", response_model=ExtractionComparisonRead)
+async def compare_document_extractions(
+    document_id: UUID, values: ExtractionComparisonRequest, session: Session
+) -> ExtractionComparisonRead:
+    await get_document(session, document_id)
+    comparison = await compare_extractions(
+        session,
+        document_id=document_id,
+        baseline_id=values.baseline_extraction_id,
+        candidate_id=values.candidate_extraction_id,
+    )
+    await session.commit()
+    return ExtractionComparisonRead.model_validate(comparison)
+
+
+@router.post(
+    "/{document_id}/extractions/comparisons/{comparison_id}/keep",
+    response_model=ExtractionComparisonRead,
+)
+async def keep_current_document_extraction(
+    document_id: UUID, comparison_id: UUID, session: Session
+) -> ExtractionComparisonRead:
+    comparison = await keep_current_extraction(
+        session, document_id=document_id, comparison_id=comparison_id, actor="user"
+    )
+    return ExtractionComparisonRead.model_validate(comparison)
+
+
+@router.post(
+    "/{document_id}/extractions/{extraction_id}/promote",
+    response_model=ExtractionPromotionRead,
+)
+async def promote_document_extraction(
+    document_id: UUID,
+    extraction_id: UUID,
+    values: ExtractionPromotionRequest,
+    session: Session,
+) -> ExtractionPromotionRead:
+    promotion = await promote_extraction(
+        session,
+        document_id=document_id,
+        extraction_id=extraction_id,
+        comparison_id=values.comparison_id,
+        actor="user",
+        reason=values.reason,
+    )
+    return ExtractionPromotionRead.model_validate(promotion)
 
 
 @router.post("/{document_id}/retry", response_model=IngestionJobRead)

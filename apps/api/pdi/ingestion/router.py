@@ -47,7 +47,9 @@ async def review_queue(
         items=[
             ReviewItem(
                 document=DocumentRead.model_validate(document),
-                warnings=document.extraction.warnings if document.extraction else [],
+                warnings=document.canonical_extraction.warnings
+                if document.canonical_extraction
+                else [],
                 proposal_count=sum(
                     proposal.status.value == "pending" for proposal in document.metadata_proposals
                 ),
@@ -66,8 +68,8 @@ async def review_document(document_id: UUID, session: Session) -> ReviewDetail:
     job = max(document.ingestion_jobs, key=lambda item: (item.created_at, item.id), default=None)
     return ReviewDetail(
         document=DocumentRead.model_validate(document),
-        extraction=ExtractionRead.model_validate(document.extraction)
-        if document.extraction
+        extraction=ExtractionRead.model_validate(document.canonical_extraction)
+        if document.canonical_extraction
         else None,
         proposals=[
             MetadataProposalRead.model_validate(item) for item in document.metadata_proposals

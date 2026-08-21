@@ -15,6 +15,9 @@ from pdi.ingestion.models import (
     CanonicalMetadataHistory,
     DocumentAsset,
     DocumentAssetKind,
+    DocumentExtraction,
+    ExtractionComparison,
+    ExtractionPromotion,
     IntelligenceRun,
     MetadataProposal,
 )
@@ -40,6 +43,9 @@ EXPORT_FORMAT_VERSION = "1"
 EXPORT_MODELS = (
     Document,
     DocumentAsset,
+    DocumentExtraction,
+    ExtractionComparison,
+    ExtractionPromotion,
     CanonicalMetadataHistory,
     IntelligenceRun,
     MetadataProposal,

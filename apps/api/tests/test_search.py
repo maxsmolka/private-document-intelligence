@@ -189,6 +189,7 @@ async def test_index_updates_and_rebuild_are_idempotent(
         extraction = document.extraction
         assert extraction is not None
         extraction.text = "Vollständig neuer Extraktionsinhalt"
+        extraction.normalized_text = extraction.text
         extraction.pages = [extraction.text]
         extraction.content_hash = "9" * 64
         await refresh_search_index(session, document, extraction)

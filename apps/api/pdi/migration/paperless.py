@@ -16,7 +16,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pdi.core.config import Settings
 from pdi.documents.models import Document
 from pdi.documents.service import ingest_path
-from pdi.ingestion.models import DocumentAsset, DocumentAssetKind
+from pdi.ingestion.extraction import normalize_text
+from pdi.ingestion.models import (
+    DocumentAsset,
+    DocumentAssetKind,
+    DocumentExtraction,
+    ExtractionPromotion,
+)
+from pdi.ingestion.queue import enqueue_document
+from pdi.ingestion.versions import canonical_extraction_for, create_extraction_version
 from pdi.knowledge.extraction import normalize_name
 from pdi.knowledge.models import Organization, OrganizationDocument, OrganizationStatus
 from pdi.operations.models import (
@@ -249,8 +257,8 @@ def diagnostic_value(field: str, value: Any) -> Any:
 def unsupported_handling(field: str) -> tuple[str, bool]:
     if field == "content":
         return (
-            "preserved_under_migration_metadata_but_not_promoted_to_extraction_or_search",
-            True,
+            "preserved_as_immutable_versioned_extraction_with_migration_provenance",
+            False,
         )
     return (
         f"preserved_metadata_and_canonical_metadata.migration.unsupported.{field}",
@@ -617,9 +625,10 @@ async def import_documents(
         )
     )
     if run is None:
+        detected_source_version = await source.version()
         run = MigrationRun(
             source_type="paperless_ngx",
-            source_version=await source.version(),
+            source_version=detected_source_version,
             status=MigrationStatus.RUNNING,
             started_at=now,
             configuration_fingerprint=configuration_fingerprint,
@@ -688,11 +697,61 @@ async def import_documents(
                     document_type=str(type_name)[:100] if type_name else None,
                     canonical_metadata=canonical,
                 )
+                archive = await source.download(source_document, original=False)
+                archive_hash = hashlib.sha256(archive).hexdigest() if archive else None
+                legacy_content = source_document.get("content")
+                legacy: DocumentExtraction | None = None
+                if isinstance(legacy_content, str):
+                    legacy, _ = await create_extraction_version(
+                        session,
+                        document_id=document.id,
+                        source="paperless_migration",
+                        provider="paperless_ngx",
+                        provider_version=run.source_version or "unknown",
+                        method="legacy_ocr_content",
+                        text=legacy_content,
+                        page_count=int(source_document.get("page_count") or 0),
+                        pages=[legacy_content] if legacy_content else [],
+                        language=None,
+                        warnings=["legacy_page_segmentation_unavailable"],
+                        provider_metadata={
+                            "source_content_sha256": hashlib.sha256(
+                                legacy_content.encode()
+                            ).hexdigest(),
+                            "normalized_content_sha256": hashlib.sha256(
+                                normalize_text(legacy_content).encode()
+                            ).hexdigest(),
+                        },
+                        source_provenance={
+                            "paperless_document_id": source_id,
+                            "migration_run_id": str(run.id),
+                            "migration_timestamp": now.isoformat(),
+                            "original_sha256": source_hash,
+                            "archived_sha256": archive_hash,
+                            "page_information": "count_only_no_safe_page_boundaries",
+                        },
+                        identity_components={
+                            "paperless_document_id": source_id,
+                            "original_sha256": source_hash,
+                            "archived_sha256": archive_hash,
+                        },
+                    )
+                    if document.canonical_extraction_id is None:
+                        document.canonical_extraction_id = legacy.id
+                        session.add(
+                            ExtractionPromotion(
+                                document_id=document.id,
+                                previous_extraction_id=None,
+                                promoted_extraction_id=legacy.id,
+                                actor="paperless_migration",
+                                reason="legacy_search_continuity",
+                                reanalysis_required=True,
+                            )
+                        )
                 if not duplicate:
                     document.title = str(source_document.get("title") or document.title)[:255]
                     await preserve_tags_notes(session, document, metadata)
                     await preserve_organization(session, document, metadata)
-                    archive = await source.download(source_document, original=False)
                     if archive and hashlib.sha256(archive).hexdigest() != source_hash:
                         archive_path = Path(temporary) / "archive.pdf"
                         archive_path.write_bytes(archive)
@@ -712,7 +771,9 @@ async def import_documents(
                                 provider_version="1",
                             )
                         )
-                    await refresh_search_index(session, document)
+                    await enqueue_document(session, document, settings.worker_max_attempts)
+                canonical_extraction = await canonical_extraction_for(session, document.id)
+                await refresh_search_index(session, document, canonical_extraction)
                 item.status = (
                     MigrationItemStatus.SKIPPED if duplicate else MigrationItemStatus.IMPORTED
                 )

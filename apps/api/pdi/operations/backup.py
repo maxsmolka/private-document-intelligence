@@ -12,7 +12,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pdi.documents.models import Document
-from pdi.ingestion.models import DocumentAsset
+from pdi.ingestion.models import DocumentAsset, DocumentExtraction
 from pdi.operations.models import BackupRecord
 from pdi.storage.base import StorageBackend
 
@@ -92,6 +92,17 @@ async def create_backup(
             await session.scalar(select(func.count()).select_from(Document)) or 0
         ),
         "asset_count": len(assets),
+        "extraction_version_count": int(
+            await session.scalar(select(func.count()).select_from(DocumentExtraction)) or 0
+        ),
+        "canonical_extraction_count": int(
+            await session.scalar(
+                select(func.count())
+                .select_from(Document)
+                .where(Document.canonical_extraction_id.is_not(None))
+            )
+            or 0
+        ),
         "assets": [
             {
                 "key": asset.storage_key,

@@ -99,6 +99,13 @@ All consumer routes remain under `/api/v1`; health routes remain unversioned. Co
 
 `search_documents` is an explicit, content-hashed projection of approved canonical fields and normalized extraction text. The API and worker update it synchronously inside source transactions; migration backfill and idempotent rebuild cover existing data and maintenance. PostgreSQL uses German weighted vectors, GIN retrieval, and an exact accepted-identifier expression index. Ranking combines `ts_rank_cd` with four documented exact-field boosts. Snippets are bounded slices of persisted page text with structured highlight ranges. See [Retrieval](RETRIEVAL.md), [benchmark](RETRIEVAL_BENCHMARK.md), and [ADR 0003](adr/0003-postgresql-fts-baseline.md).
 
+Document text is versioned. `document_extractions` stores immutable provider outputs and source
+provenance; `documents.canonical_extraction_id` explicitly selects the zero-or-one version used by
+search, review, intelligence, and new knowledge analysis. Newer extractions never become canonical
+implicitly. Deterministic comparisons record coverage, similarity, page metrics, and critical-field
+preservation. Promotion is transactional, audited in `extraction_promotions`, refreshes search, and
+marks re-analysis as required without rewriting historical evidence or accepted knowledge.
+
 ## Document knowledge
 
 Completed intelligence runs feed a shared deterministic proposal stage. Canonical organizations, contracts, document relationships, events, deadlines, and actions exist only after evidence-gated review. Explicit relational tables and foreign keys keep provenance and common navigation straightforward; append-only history records decisions and state changes. Exact alias resolution may suggest a link, but only an explicit merge can consolidate organizations. Accepted organization/contract values and merge results refresh the M4 search projection in the same transaction. See [Document knowledge](KNOWLEDGE.md), [benchmark](KNOWLEDGE_BENCHMARK.md), and [ADR 0004](adr/0004-relational-review-first-knowledge.md).

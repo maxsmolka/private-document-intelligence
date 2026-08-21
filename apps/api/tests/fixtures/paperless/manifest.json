@@ -32,6 +32,8 @@
       "permissions": {"view": [7], "change": [7]},
       "storage_path": 3,
       "workflow_state": "completed",
+      "content": "Legacy OCR policy text VS-12345678",
+      "page_count": 1,
       "original_file": "policy.pdf",
       "original_file_name": "Generali Policy.pdf"
     },

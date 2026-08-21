@@ -24,7 +24,10 @@ async def review_documents(
     statement = (
         select(Document)
         .where(Document.status == DocumentStatus.NEEDS_REVIEW)
-        .options(selectinload(Document.extraction), selectinload(Document.metadata_proposals))
+        .options(
+            selectinload(Document.canonical_extraction),
+            selectinload(Document.metadata_proposals),
+        )
         .order_by(Document.updated_at, Document.id)
         .limit(limit)
         .offset(offset)
@@ -43,7 +46,8 @@ async def review_detail(session: AsyncSession, document_id: uuid.UUID) -> Docume
         select(Document)
         .where(Document.id == document_id)
         .options(
-            selectinload(Document.extraction),
+            selectinload(Document.canonical_extraction),
+            selectinload(Document.extractions),
             selectinload(Document.metadata_proposals),
             selectinload(Document.ingestion_jobs),
             selectinload(Document.assets),
@@ -135,7 +139,7 @@ async def confirm_document(
             else ProposalStatus.SUPERSEDED
         )
         proposal.confirmed_at = now
-    await refresh_search_index(session, document, document.extraction)
+    await refresh_search_index(session, document, document.canonical_extraction)
     await session.commit()
     await session.refresh(document)
     return document
@@ -233,7 +237,7 @@ async def accept_document_proposal(
         ):
             competing.status = ProposalStatus.SUPERSEDED
             competing.confirmed_at = now
-    await refresh_search_index(session, document, document.extraction)
+    await refresh_search_index(session, document, document.canonical_extraction)
     await session.commit()
     await session.refresh(document)
     return document
@@ -271,6 +275,8 @@ async def extraction_for(
     return cast(
         DocumentExtraction | None,
         await session.scalar(
-            select(DocumentExtraction).where(DocumentExtraction.document_id == document_id)
+            select(DocumentExtraction)
+            .join(Document, Document.canonical_extraction_id == DocumentExtraction.id)
+            .where(Document.id == document_id)
         ),
     )

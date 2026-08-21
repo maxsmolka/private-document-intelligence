@@ -1,7 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
 import type {
-  DocumentListResponse, DocumentRecord, ReviewDetail, ReviewListResponse, SearchResponse,
+  DocumentListResponse, DocumentRecord, ExtractionHistory, ReviewDetail, ReviewListResponse, SearchResponse,
 } from "./documents";
 import type {
   ActionItem, Contract, ContractDetail, Deadline, KnowledgeProposal, Organization,
@@ -28,6 +28,7 @@ export function getDocuments(filters?: { status?: string; lifeArea?: string }) {
   return serverRequest<DocumentListResponse>(`/api/v1/documents${params.size ? `?${params}` : ""}`);
 }
 export const getDocument = (id: string) => serverRequest<DocumentRecord>(`/api/v1/documents/${encodeURIComponent(id)}`);
+export const getExtractionHistory = (id: string) => serverRequest<ExtractionHistory>(`/api/v1/documents/${encodeURIComponent(id)}/extractions`);
 export const getReviewQueue = () => serverRequest<ReviewListResponse>("/api/v1/review");
 export const getReviewDetail = (id: string) => serverRequest<ReviewDetail>(`/api/v1/review/${encodeURIComponent(id)}`);
 export function getSearch(filters: Record<string, string | number | undefined>) {

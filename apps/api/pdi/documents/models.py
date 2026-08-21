@@ -3,7 +3,7 @@ from datetime import date, datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, BigInteger, Date, DateTime, Enum, Index, String, Uuid, func
+from sqlalchemy import JSON, BigInteger, Date, DateTime, Enum, ForeignKey, Index, String, Uuid, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 if TYPE_CHECKING:
@@ -70,11 +70,25 @@ class Document(Base):
     document_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
     source: Mapped[str] = mapped_column(String(100), default="upload")
     canonical_metadata: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
+    canonical_extraction_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(
+            "document_extractions.id",
+            name="fk_documents_canonical_extraction_id",
+            ondelete="SET NULL",
+            use_alter=True,
+        ),
+        nullable=True,
+    )
     ingestion_jobs: Mapped[list["IngestionJob"]] = relationship(
         back_populates="document", cascade="all, delete-orphan"
     )
-    extraction: Mapped["DocumentExtraction | None"] = relationship(
-        back_populates="document", cascade="all, delete-orphan", uselist=False
+    extractions: Mapped[list["DocumentExtraction"]] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+        foreign_keys="DocumentExtraction.document_id",
+    )
+    canonical_extraction: Mapped["DocumentExtraction | None"] = relationship(
+        foreign_keys=[canonical_extraction_id], post_update=True
     )
     metadata_proposals: Mapped[list["MetadataProposal"]] = relationship(
         back_populates="document", cascade="all, delete-orphan"
@@ -91,6 +105,17 @@ class Document(Base):
     search_document: Mapped["SearchDocument | None"] = relationship(
         back_populates="document", cascade="all, delete-orphan", uselist=False
     )
+
+    @property
+    def extraction(self) -> "DocumentExtraction | None":
+        """Compatibility accessor; canonical selection remains the explicit database pointer."""
+        return self.canonical_extraction
+
+    @extraction.setter
+    def extraction(self, value: "DocumentExtraction | None") -> None:
+        self.canonical_extraction = value
+        if value is not None and value not in self.extractions:
+            self.extractions.append(value)
 
 
 from pdi.ingestion.models import (  # noqa: E402

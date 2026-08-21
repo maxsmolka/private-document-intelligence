@@ -4,7 +4,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pdi.documents.models import Document
-from pdi.ingestion.models import DocumentAsset, DocumentAssetKind
+from pdi.ingestion.models import DocumentAsset, DocumentAssetKind, DocumentExtraction
+from pdi.search.models import SearchDocument
 from pdi.storage.base import StorageBackend
 
 
@@ -18,6 +19,9 @@ class ReconciliationReport:
     orphaned_derived_assets: list[str]
     orphaned_original_files: list[str]
     missing_derived_assets: list[str]
+    invalid_canonical_extractions: list[str]
+    orphaned_extractions: list[str]
+    stale_search_projections: list[str]
 
 
 async def reconcile_storage(
@@ -46,6 +50,31 @@ async def reconcile_storage(
         if age_seconds >= stale_after_seconds
     )
     deleted: list[str] = []
+    documents = list(await session.scalars(select(Document)))
+    extractions = list(await session.scalars(select(DocumentExtraction)))
+    extractions_by_id = {item.id: item for item in extractions}
+    document_ids = {item.id for item in documents}
+    invalid_canonical = sorted(
+        str(document.id)
+        for document in documents
+        if document.canonical_extraction_id is not None
+        and (
+            document.canonical_extraction_id not in extractions_by_id
+            or extractions_by_id[document.canonical_extraction_id].document_id != document.id
+        )
+    )
+    orphaned_extractions = sorted(
+        str(extraction.id)
+        for extraction in extractions
+        if extraction.document_id not in document_ids
+    )
+    search_rows = {item.document_id: item for item in await session.scalars(select(SearchDocument))}
+    stale_search = sorted(
+        str(document.id)
+        for document in documents
+        if (indexed := search_rows.get(document.id)) is not None
+        and indexed.extraction_id != document.canonical_extraction_id
+    )
     if cleanup:
         for key in (*orphaned_derived, *stale):
             await storage.delete(key)
@@ -59,4 +88,7 @@ async def reconcile_storage(
         orphaned_derived_assets=orphaned_derived,
         orphaned_original_files=orphaned_original,
         missing_derived_assets=missing_derived,
+        invalid_canonical_extractions=invalid_canonical,
+        orphaned_extractions=orphaned_extractions,
+        stale_search_projections=stale_search,
     )

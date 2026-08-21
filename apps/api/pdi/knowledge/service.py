@@ -498,7 +498,9 @@ async def merge_organizations(
             }
             document.canonical_metadata = metadata
             extraction = await session.scalar(
-                select(DocumentExtraction).where(DocumentExtraction.document_id == document.id)
+                select(DocumentExtraction)
+                .join(Document, Document.canonical_extraction_id == DocumentExtraction.id)
+                .where(Document.id == document.id)
             )
             await refresh_search_index(session, document, extraction)
     await session.execute(

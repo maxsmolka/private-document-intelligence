@@ -33,6 +33,7 @@ export interface DocumentRecord {
   document_type: string | null;
   source: string;
   canonical_metadata: Record<string, unknown>;
+  canonical_extraction_id: string | null;
 }
 
 export interface DocumentListResponse {
@@ -59,18 +60,80 @@ export interface IngestionJob {
 export interface DocumentExtraction {
   id: string;
   document_id: string;
+  source: string;
   provider: string;
   provider_version: string;
   method: string;
   text: string;
+  normalized_text: string;
   page_count: number;
   pages: string[];
   language: string | null;
   content_hash: string;
   warnings: string[];
   extraction_metadata: Record<string, unknown>;
+  source_provenance: Record<string, unknown>;
   created_at: string;
   updated_at: string;
+}
+
+export interface ExtractionVersion {
+  id: string;
+  document_id: string;
+  source: string;
+  provider: string;
+  provider_version: string;
+  method: string;
+  page_count: number;
+  language: string | null;
+  content_hash: string;
+  normalized_content_hash: string;
+  character_count: number;
+  warnings: string[];
+  source_provenance: Record<string, unknown>;
+  created_at: string;
+  canonical: boolean;
+}
+
+export interface ExtractionComparison {
+  id: string;
+  document_id: string;
+  baseline_extraction_id: string;
+  candidate_extraction_id: string;
+  status: "equivalent" | "review_required";
+  metrics: {
+    normalized_hash_equal?: boolean;
+    baseline_characters?: number;
+    candidate_characters?: number;
+    baseline_pages?: number;
+    candidate_pages?: number;
+    candidate_non_whitespace_coverage?: number | null;
+    similarity?: number;
+    critical_field_preservation?: number | null;
+  };
+  review_decision: "keep_current" | "promote_candidate" | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+}
+
+export interface ExtractionPromotion {
+  id: string;
+  document_id: string;
+  previous_extraction_id: string | null;
+  promoted_extraction_id: string;
+  comparison_id: string | null;
+  reason: string;
+  actor: string;
+  reanalysis_required: boolean;
+  created_at: string;
+}
+
+export interface ExtractionHistory {
+  canonical_extraction_id: string | null;
+  versions: ExtractionVersion[];
+  comparisons: ExtractionComparison[];
+  promotions: ExtractionPromotion[];
 }
 
 export interface MetadataProposal {
@@ -303,6 +366,23 @@ export function rejectProposal(documentId: string, proposalId: string) {
 
 export function retryDocument(id: string) {
   return mutate<IngestionJob>(`/api/v1/documents/${encodeURIComponent(id)}/retry`);
+}
+
+export function promoteExtraction(
+  documentId: string,
+  extractionId: string,
+  comparisonId: string | null,
+) {
+  return mutate<ExtractionPromotion>(
+    `/api/v1/documents/${encodeURIComponent(documentId)}/extractions/${encodeURIComponent(extractionId)}/promote`,
+    { comparison_id: comparisonId, reason: "user_review" },
+  );
+}
+
+export function keepCurrentExtraction(documentId: string, comparisonId: string) {
+  return mutate<ExtractionComparison>(
+    `/api/v1/documents/${encodeURIComponent(documentId)}/extractions/comparisons/${encodeURIComponent(comparisonId)}/keep`,
+  );
 }
 
 export function documentContentUrl(id: string) {

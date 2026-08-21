@@ -23,6 +23,7 @@ class DocumentRead(BaseModel):
     document_type: str | None
     source: str
     canonical_metadata: dict[str, object]
+    canonical_extraction_id: UUID | None
 
 
 class DocumentList(BaseModel):

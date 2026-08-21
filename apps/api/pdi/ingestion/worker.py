@@ -29,6 +29,7 @@ from pdi.ingestion.models import (
     DocumentAsset,
     DocumentAssetKind,
     DocumentExtraction,
+    ExtractionPromotion,
     IngestionJob,
     IngestionJobState,
     IntelligenceRunStatus,
@@ -36,6 +37,11 @@ from pdi.ingestion.models import (
     ProposalStatus,
 )
 from pdi.ingestion.queue import claim_job, record_failure, recover_stale_jobs, transition_job
+from pdi.ingestion.versions import (
+    canonical_extraction_for,
+    compare_extractions,
+    create_extraction_version,
+)
 from pdi.intelligence.service import run_intelligence
 from pdi.knowledge.extraction import generate_knowledge_proposals
 from pdi.search.service import refresh_search_index
@@ -48,22 +54,37 @@ LIVENESS_PATH = Path("/tmp/pdi-worker-alive")
 async def persist_extraction(
     session: AsyncSession, document_id: uuid.UUID, result: ExtractionResult
 ) -> DocumentExtraction:
-    extraction = await session.scalar(
-        select(DocumentExtraction).where(DocumentExtraction.document_id == document_id)
+    document = await session.get(Document, document_id)
+    if document is None:
+        raise ExtractionError("Document record no longer exists")
+    extraction, _ = await create_extraction_version(
+        session,
+        document_id=document_id,
+        source="pdi",
+        provider=result.provider,
+        provider_version=result.provider_version,
+        method=result.method,
+        text=result.text,
+        page_count=result.page_count,
+        pages=result.pages,
+        language=result.language,
+        warnings=result.warnings,
+        provider_metadata=result.metadata,
+        source_provenance={"document_sha256": document.sha256},
+        identity_components={"document_sha256": document.sha256},
     )
-    if extraction is None:
-        extraction = DocumentExtraction(document_id=document_id)
-        session.add(extraction)
-    extraction.provider = result.provider
-    extraction.provider_version = result.provider_version
-    extraction.method = result.method
-    extraction.text = result.text
-    extraction.page_count = result.page_count
-    extraction.pages = result.pages
-    extraction.language = result.language
-    extraction.content_hash = result.content_hash
-    extraction.warnings = result.warnings
-    extraction.extraction_metadata = result.metadata
+    if document.canonical_extraction_id is None:
+        document.canonical_extraction_id = extraction.id
+        session.add(
+            ExtractionPromotion(
+                document_id=document.id,
+                previous_extraction_id=None,
+                promoted_extraction_id=extraction.id,
+                actor="pdi_worker",
+                reason="initial_successful_extraction",
+                reanalysis_required=False,
+            )
+        )
     return extraction
 
 
@@ -130,6 +151,7 @@ async def process_job(
     session: AsyncSession, job: IngestionJob, worker_id: str, settings: Settings
 ) -> None:
     started = time.perf_counter()
+    intelligence_request_key = f"ingestion:{job.id}:attempt:{job.attempt_count}"
     document = await session.get(Document, job.document_id)
     if document is None:
         raise ExtractionError("Document record no longer exists")
@@ -203,15 +225,41 @@ async def process_job(
     job.stage = "document_intelligence"
     job.heartbeat_at = datetime.now(UTC)
     await session.commit()
+    await session.refresh(document)
+    if document.canonical_extraction_id != extraction.id:
+        if document.canonical_extraction_id is None:
+            raise ExtractionError("Canonical extraction was not persisted")
+        comparison = await compare_extractions(
+            session,
+            document_id=document.id,
+            baseline_id=document.canonical_extraction_id,
+            candidate_id=extraction.id,
+        )
+        await session.commit()
+        document.status = DocumentStatus.NEEDS_REVIEW
+        canonical = await canonical_extraction_for(session, document.id)
+        await refresh_search_index(session, document, canonical)
+        transition_job(
+            session,
+            job,
+            IngestionJobState.COMPLETED,
+            stage=f"extraction_{comparison.status.value}",
+            worker_id=worker_id,
+        )
+        await session.commit()
+        return
     intelligence_run = await run_intelligence(
         session,
         document=document,
         extraction=extraction,
         settings=settings,
-        request_key=f"ingestion:{job.id}:attempt:{job.attempt_count}",
+        request_key=intelligence_request_key,
     )
     if intelligence_run.status == IntelligenceRunStatus.FAILED:
-        extraction.warnings = [*extraction.warnings, "document_intelligence_failed"]
+        logger.warning(
+            "document_intelligence_failed",
+            extra={"document_id": str(document.id), "operation": "document_intelligence"},
+        )
     else:
         try:
             async with session.begin_nested():
@@ -222,7 +270,6 @@ async def process_job(
                     run=intelligence_run,
                 )
         except Exception:
-            extraction.warnings = [*extraction.warnings, "knowledge_extraction_failed"]
             logger.exception(
                 "knowledge_extraction_failed",
                 extra={"document_id": str(document.id), "operation": "knowledge_extraction"},
@@ -230,6 +277,7 @@ async def process_job(
     await ensure_metadata_proposals(session, document)
     document.status = DocumentStatus.NEEDS_REVIEW
     await refresh_search_index(session, document, extraction)
+    await session.refresh(job)
     transition_job(
         session,
         job,

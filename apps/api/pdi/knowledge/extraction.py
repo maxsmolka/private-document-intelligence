@@ -182,7 +182,9 @@ def inferred_contract_type(document: Document) -> ContractType:
     return ContractType.OTHER
 
 
-def contract_candidate(document: Document, run: IntelligenceRun) -> Candidate | None:
+def contract_candidate(
+    document: Document, run: IntelligenceRun, extraction: DocumentExtraction
+) -> Candidate | None:
     proposals = metadata_candidates(run)
     identifiers = [item for item in proposals if item.field_name == "identifier"]
     contract_document = (document.document_type or "") in {
@@ -192,7 +194,7 @@ def contract_candidate(document: Document, run: IntelligenceRun) -> Candidate | 
     } or bool(
         re.search(
             r"Vertrag|Versicherungsschein|Police",
-            document.extraction.text if document.extraction else "",
+            extraction.text,
             re.I,
         )
     )
@@ -303,7 +305,10 @@ def temporal_candidates(document: Document, extraction: DocumentExtraction) -> l
 
 
 async def relationship_candidates(
-    session: AsyncSession, document: Document, run: IntelligenceRun
+    session: AsyncSession,
+    document: Document,
+    run: IntelligenceRun,
+    extraction: DocumentExtraction,
 ) -> list[Candidate]:
     identifiers = [
         item.normalized_value or item.proposed_value
@@ -328,7 +333,7 @@ async def relationship_candidates(
                 DocumentRelationshipType.AMENDS
                 if re.search(
                     r"Änderung|Anpassung|Nachtrag",
-                    document.extraction.text if document.extraction else "",
+                    extraction.text,
                     re.I,
                 )
                 else DocumentRelationshipType.SAME_CASE
@@ -379,12 +384,11 @@ async def generate_knowledge_proposals(
         .values(status=ProposalStatus.SUPERSEDED, resolved_at=datetime.now(UTC))
     )
     await session.refresh(run, attribute_names=["proposals"])
-    document.extraction = extraction
     candidates = await organization_candidates(session, run)
-    if contract := contract_candidate(document, run):
+    if contract := contract_candidate(document, run, extraction):
         candidates.append(contract)
     candidates.extend(temporal_candidates(document, extraction))
-    candidates.extend(await relationship_candidates(session, document, run))
+    candidates.extend(await relationship_candidates(session, document, run, extraction))
     created: list[KnowledgeProposal] = []
     for candidate in candidates:
         identity = proposal_identity(extraction, candidate)

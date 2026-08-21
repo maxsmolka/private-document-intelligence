@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from pdi.core.config import Settings
@@ -158,5 +158,6 @@ async def test_worker_persists_ocr_asset_and_retry_is_idempotent(
             ).all()
         )
         assert len(assets) == 1
+        assert await session.scalar(select(func.count()).select_from(DocumentExtraction)) == 1
         assert assets[0].storage_key == first_key
         assert original.read_bytes() == original_bytes

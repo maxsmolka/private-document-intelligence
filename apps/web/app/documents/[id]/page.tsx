@@ -3,8 +3,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { RetryProcessingButton } from "@/components/retry-processing-button";
+import { ExtractionReviewPanel } from "@/components/extraction-review-panel";
 import { ApiError, documentContentUrl } from "@/lib/api/documents";
-import { getDocument } from "@/lib/api/server";
+import { getDocument, getExtractionHistory } from "@/lib/api/server";
 
 function label(value: string) {
   return value.replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase());
@@ -44,7 +45,7 @@ export default async function DocumentDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const document = await load(id);
+  const [document, extractionHistory] = await Promise.all([load(id), getExtractionHistory(id)]);
   const contentUrl = documentContentUrl(document.id);
   const metadata = [
     [FileText, "Filename", document.original_filename],
@@ -89,6 +90,7 @@ export default async function DocumentDetailPage({
           <RetryProcessingButton documentId={document.id} />
         </div>
       ) : null}
+      <ExtractionReviewPanel documentId={document.id} history={extractionHistory} />
       <div className="mt-9 grid gap-6 lg:grid-cols-[minmax(260px,0.38fr)_minmax(0,1fr)]">
         <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm shadow-stone-950/[0.02]">
           <h2 className="text-sm font-semibold text-stone-900">Document information</h2>
