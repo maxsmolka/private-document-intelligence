@@ -334,21 +334,196 @@ async def dry_run(source: PaperlessSource, session: AsyncSession) -> dict[str, A
             )
         )
     )
-    missing = []
-    unsupported = []
+    existing_hashes = set(await session.scalars(select(Document.sha256)))
+    seen_source_hashes: dict[str, str] = {}
+    missing_originals: list[str] = []
+    missing_archives: list[str] = []
+    unsupported: list[str] = []
+    document_results: list[dict[str, Any]] = []
+    duplicate_groups: dict[str, list[str]] = {}
+    original_bytes = 0
+    archive_bytes = 0
+    import_original_bytes = 0
+    import_archive_bytes = 0
+    stored_original_bytes = 0
+    stored_archive_bytes = 0
+    expected_imports = 0
+    expected_skips = 0
+    expected_failures = 0
+    accessible_originals = 0
+    accessible_archives = 0
+    expected_archives = 0
+    archives_stored = 0
+    archives_covered_by_original = 0
     for document in documents:
+        identity = str(document["id"])
         mapped = mapped_metadata(document, catalogs)
         if mapped["unsupported"]:
-            unsupported.append(str(document["id"]))
-        if await source.download(document, original=True) is None:
-            missing.append(str(document["id"]))
+            unsupported.append(identity)
+        original = await source.download(document, original=True)
+        archive_expected = bool(document.get("archived_file") or document.get("archived_file_name"))
+        archive = await source.download(document, original=False) if archive_expected else None
+        if archive_expected:
+            expected_archives += 1
+        if archive is None and archive_expected:
+            missing_archives.append(identity)
+        elif archive is not None:
+            accessible_archives += 1
+            archive_bytes += len(archive)
+
+        result: dict[str, Any] = {
+            "document_id": identity,
+            "title": str(document.get("title") or ""),
+            "original_accessible": original is not None,
+            "archive_expected": archive_expected,
+            "archive_accessible": archive is not None,
+            "metadata": {
+                "correspondent": mapped["correspondent"] is not None,
+                "document_type": mapped["document_type"] is not None,
+                "tags": len(mapped["tags"]),
+                "custom_fields": len(mapped["custom_fields"]),
+                "notes": len(mapped["notes"]),
+                "archive_serial_number": mapped["archive_serial_number"] is not None,
+                "owner": mapped["owner"] is not None,
+                "permissions": mapped["permissions"] is not None,
+                "storage_path": mapped["storage_path"] is not None,
+                "unsupported_fields": sorted(mapped["unsupported"]),
+            },
+            "source_id_seen_in_prior_migration": identity in existing_ids,
+        }
+        if original is None:
+            missing_originals.append(identity)
+            expected_failures += 1
+            result.update(
+                {
+                    "outcome": "failure",
+                    "reason": "original_file_unavailable",
+                    "original_bytes": None,
+                    "archive_bytes": len(archive) if archive is not None else None,
+                }
+            )
+            document_results.append(result)
+            continue
+
+        accessible_originals += 1
+        original_size = len(original)
+        original_bytes += original_size
+        import_original_bytes += original_size
+        original_hash = hashlib.sha256(original).hexdigest()
+        duplicate_of = seen_source_hashes.get(original_hash)
+        if original_hash in existing_hashes:
+            outcome = "skip"
+            reason = "duplicate_existing_pdi_sha256"
+        elif duplicate_of is not None:
+            outcome = "skip"
+            reason = "duplicate_earlier_source_document_sha256"
+            duplicate_groups.setdefault(original_hash, [duplicate_of]).append(identity)
+        else:
+            outcome = "import"
+            reason = "new_original_sha256"
+            seen_source_hashes[original_hash] = identity
+
+        archive_size = len(archive) if archive is not None else None
+        archive_hash = hashlib.sha256(archive).hexdigest() if archive is not None else None
+        if outcome == "import":
+            expected_imports += 1
+            stored_original_bytes += original_size
+            if archive is not None:
+                import_archive_bytes += len(archive)
+                if archive_hash == original_hash:
+                    archives_covered_by_original += 1
+                else:
+                    archives_stored += 1
+                    stored_archive_bytes += len(archive)
+        else:
+            expected_skips += 1
+        result.update(
+            {
+                "outcome": outcome,
+                "reason": reason,
+                "duplicate_of_source_document_id": duplicate_of,
+                "original_bytes": original_size,
+                "original_sha256": original_hash,
+                "archive_bytes": archive_size,
+                "archive_sha256": archive_hash,
+                "archive_matches_original": archive_hash == original_hash
+                if archive_hash is not None
+                else None,
+            }
+        )
+        document_results.append(result)
+
+    metadata_totals = {
+        key: sum(bool(result["metadata"][key]) for result in document_results)
+        for key in (
+            "correspondent",
+            "document_type",
+            "tags",
+            "custom_fields",
+            "notes",
+            "archive_serial_number",
+            "owner",
+            "permissions",
+            "storage_path",
+        )
+    }
     return {
         "mode": "dry_run",
         "documents": len(documents),
-        "would_import": sum(str(value["id"]) not in existing_ids for value in documents),
+        "would_import": expected_imports,
         "already_imported": sum(str(value["id"]) in existing_ids for value in documents),
-        "missing_originals": missing,
+        "expected_imports": expected_imports,
+        "expected_skips": expected_skips,
+        "expected_failures": expected_failures,
+        "missing_originals": missing_originals,
+        "missing_archives": missing_archives,
         "unsupported_documents": unsupported,
+        "asset_access": {
+            "originals_expected": len(documents),
+            "originals_accessible": accessible_originals,
+            "archives_expected": expected_archives,
+            "archives_accessible": accessible_archives,
+        },
+        "duplicate_handling": {
+            "existing_pdi_sha256_matches": sum(
+                result.get("reason") == "duplicate_existing_pdi_sha256"
+                for result in document_results
+            ),
+            "source_duplicate_documents": sum(
+                len(value) - 1 for value in duplicate_groups.values()
+            ),
+            "source_duplicate_groups": [
+                {"sha256": value, "document_ids": identities}
+                for value, identities in sorted(duplicate_groups.items())
+            ],
+            "handling": "link_existing_document_and_skip_duplicate_storage",
+            "metadata_merge_on_duplicate": False,
+        },
+        "metadata_mapping": {
+            "documents_evaluated": len(documents),
+            "documents_with_unsupported_fields": len(unsupported),
+            "mapped_field_presence": metadata_totals,
+        },
+        "expected_asset_preservation": {
+            "originals_stored": expected_imports,
+            "archives_stored_separately": archives_stored,
+            "archives_covered_by_identical_original": archives_covered_by_original,
+            "duplicate_originals_linked_to_existing_document": expected_skips,
+            "missing_archives": len(missing_archives),
+        },
+        "estimated_volume_bytes": {
+            "dry_run_validation_transfer": original_bytes + archive_bytes,
+            "actual_import_transfer": import_original_bytes + import_archive_bytes,
+            "new_original_storage": stored_original_bytes,
+            "new_archive_storage": stored_archive_bytes,
+            "new_total_storage": stored_original_bytes + stored_archive_bytes,
+        },
+        "document_results": document_results,
+        "paperless_access": {
+            "request_method": "GET",
+            "mutation_attempted": False,
+            "source_unchanged_by_design": True,
+        },
         "mutated": False,
     }
 

@@ -79,6 +79,19 @@ async def test_paperless_analyze_dry_run_import_resume_and_verify(
     async with session_factory() as session:
         preview = await dry_run(source, session)
         assert preview["would_import"] == 2 and preview["mutated"] is False
+        assert preview["expected_imports"] == 2
+        assert preview["expected_skips"] == 0
+        assert preview["expected_failures"] == 0
+        assert preview["asset_access"] == {
+            "originals_expected": 2,
+            "originals_accessible": 2,
+            "archives_expected": 1,
+            "archives_accessible": 1,
+        }
+        assert preview["duplicate_handling"]["source_duplicate_documents"] == 0
+        assert preview["expected_asset_preservation"]["archives_stored_separately"] == 1
+        assert preview["estimated_volume_bytes"]["new_total_storage"] > 0
+        assert preview["paperless_access"]["mutation_attempted"] is False
         assert await session.scalar(select(func.count()).select_from(MigrationRun)) == 0
         run = await import_documents(
             source, session, storage, settings, configuration_fingerprint="a" * 64
