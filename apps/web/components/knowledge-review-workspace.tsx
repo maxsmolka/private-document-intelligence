@@ -79,9 +79,8 @@ export function KnowledgeReviewWorkspace({ proposals }: { proposals: KnowledgePr
             <Link href={`/documents/${item.document_id}`} className="mt-2 inline-block text-xs text-stone-500 hover:text-stone-900">Open source document →</Link>
           </div>
           <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
-            <button disabled={busy === item.id} onClick={() => decide(item, "create")} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-stone-900 px-3 text-xs font-medium text-white"><Check className="size-3.5" />Accept</button>
+            <button disabled={busy === item.id} onClick={() => decide(item, item.possible_existing_organization_id ? "link" : "create")} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-stone-900 px-3 text-xs font-medium text-white">{item.possible_existing_organization_id ? <Link2 className="size-3.5" /> : <Check className="size-3.5" />}{item.possible_existing_organization_id ? "Link existing" : "Accept"}</button>
             <button disabled={busy === item.id} onClick={() => setEditing(editing === item.id ? null : item.id)} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-stone-200 px-3 text-xs text-stone-600"><Pencil className="size-3.5" />Edit</button>
-            {item.possible_existing_organization_id ? <button disabled={busy === item.id} onClick={() => decide(item, "link")} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-stone-200 px-3 text-xs text-stone-600"><Link2 className="size-3.5" />Link existing</button> : null}
             <button disabled={busy === item.id} onClick={() => decide(item, "reject")} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-stone-200 px-3 text-xs text-stone-500 hover:border-red-200 hover:text-red-700"><X className="size-3.5" />Reject</button>
           </div>
         </div>

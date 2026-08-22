@@ -54,6 +54,7 @@ from pdi.knowledge.service import (
     accept_knowledge_proposal,
     merge_organizations,
     reject_knowledge_proposal,
+    resolve_exact_organization,
     update_action_status,
     update_deadline_status,
 )
@@ -433,8 +434,22 @@ async def knowledge_review(
         statement = statement.where(KnowledgeProposal.document_id == document_id)
     statement = statement.order_by(KnowledgeProposal.created_at, KnowledgeProposal.id)
     items, total = await page(session, statement, limit, offset)
+    reads = []
+    for item in items:
+        read = KnowledgeProposalRead.model_validate(item)
+        if item.proposal_type == KnowledgeProposalType.ORGANIZATION:
+            name = str(item.payload.get("canonical_name", "")).strip()
+            existing, reason = await resolve_exact_organization(session, name, item.payload)
+            if existing is not None:
+                read = read.model_copy(
+                    update={
+                        "possible_existing_organization_id": existing.id,
+                        "match_reason": reason,
+                    }
+                )
+        reads.append(read)
     return KnowledgeProposalList(
-        items=[KnowledgeProposalRead.model_validate(item) for item in items],
+        items=reads,
         total=total,
         limit=limit,
         offset=offset,

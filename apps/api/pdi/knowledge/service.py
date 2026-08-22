@@ -1,10 +1,11 @@
+import re
 import uuid
 from datetime import UTC, date, datetime
 from enum import StrEnum
 from typing import Any, cast
 
 from fastapi import HTTPException
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pdi.documents.models import Document, LifeArea
@@ -134,6 +135,86 @@ async def link_organization_document(
         )
 
 
+_STRONG_ORGANIZATION_IDENTIFIER_KEYS = {
+    "company_number",
+    "registration_number",
+    "tax_id",
+    "vat_id",
+}
+
+
+def strong_organization_identifiers(payload: dict[str, Any]) -> set[tuple[str, str]]:
+    identifiers: set[tuple[str, str]] = set()
+    for key in _STRONG_ORGANIZATION_IDENTIFIER_KEYS:
+        value = payload.get(key)
+        if not isinstance(value, str):
+            continue
+        normalized = re.sub(r"[^A-Z0-9]", "", value.upper())
+        if len(normalized) >= 5:
+            identifiers.add((key, normalized))
+    nested = payload.get("strong_identifiers")
+    if isinstance(nested, dict):
+        identifiers.update(strong_organization_identifiers(nested))
+    return identifiers
+
+
+async def lock_organization_identity(
+    session: AsyncSession, normalized_name: str, identifiers: set[tuple[str, str]]
+) -> None:
+    connection = await session.connection()
+    if connection.dialect.name != "postgresql":
+        return
+    keys = {f"organization:name:{normalized_name}"}
+    keys.update(f"organization:{kind}:{value}" for kind, value in identifiers)
+    for key in sorted(keys):
+        await session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:identity, 0))"),
+            {"identity": key},
+        )
+
+
+async def resolve_exact_organization(
+    session: AsyncSession, name: str, payload: dict[str, Any]
+) -> tuple[Organization | None, str | None]:
+    normalized = normalize_name(name)
+    organization = await session.scalar(
+        select(Organization)
+        .outerjoin(OrganizationAlias, OrganizationAlias.organization_id == Organization.id)
+        .where(
+            Organization.status == OrganizationStatus.ACTIVE,
+            or_(
+                Organization.normalized_name == normalized,
+                OrganizationAlias.normalized_alias == normalized,
+            ),
+        )
+        .order_by(Organization.created_at, Organization.id)
+    )
+    if organization is not None:
+        reason = (
+            "exact normalized canonical name"
+            if organization.normalized_name == normalized
+            else "exact normalized alias"
+        )
+        return organization, reason
+    identifiers = strong_organization_identifiers(payload)
+    if not identifiers:
+        return None, None
+    accepted = await session.execute(
+        select(KnowledgeProposal.resolved_resource_id, KnowledgeProposal.payload).where(
+            KnowledgeProposal.proposal_type == KnowledgeProposalType.ORGANIZATION,
+            KnowledgeProposal.status == ProposalStatus.ACCEPTED,
+            KnowledgeProposal.resolved_resource_id.is_not(None),
+        )
+    )
+    for organization_id, accepted_payload in accepted:
+        if not identifiers.intersection(strong_organization_identifiers(accepted_payload)):
+            continue
+        organization = await session.get(Organization, organization_id)
+        if organization is not None and organization.status == OrganizationStatus.ACTIVE:
+            return organization, "exact strong organization identifier"
+    return None, None
+
+
 async def accept_organization(
     session: AsyncSession, proposal: KnowledgeProposal, decision: KnowledgeDecision
 ) -> Organization:
@@ -141,6 +222,9 @@ async def accept_organization(
     name = str(payload.get("canonical_name", "")).strip()[:255]
     if not name:
         raise HTTPException(status_code=422, detail="Organization name required")
+    normalized_name = normalize_name(name)
+    identifiers = strong_organization_identifiers(payload)
+    await lock_organization_identity(session, normalized_name, identifiers)
     if decision.action == "link_existing":
         target = decision.target_resource_id or proposal.possible_existing_organization_id
         organization = await session.get(Organization, target) if target else None
@@ -148,24 +232,30 @@ async def accept_organization(
             raise HTTPException(status_code=422, detail="Active target organization required")
         await add_alias(session, organization, name, "accepted_proposal", proposal.document_id)
     else:
-        organization = Organization(
-            canonical_name=name,
-            normalized_name=normalize_name(name),
-            organization_type=payload.get("organization_type"),
-            source_document_id=proposal.document_id,
-            source_extraction_id=proposal.extraction_id,
-            intelligence_run_id=proposal.intelligence_run_id,
-            source_proposal_id=proposal.id,
-            evidence=proposal.evidence,
-        )
-        session.add(organization)
-        await session.flush()
+        organization, match_reason = await resolve_exact_organization(session, name, payload)
+        if organization is not None:
+            proposal.possible_existing_organization_id = organization.id
+            proposal.match_reason = match_reason
+            await add_alias(session, organization, name, "accepted_proposal", proposal.document_id)
+        else:
+            organization = Organization(
+                canonical_name=name,
+                normalized_name=normalized_name,
+                organization_type=payload.get("organization_type"),
+                source_document_id=proposal.document_id,
+                source_extraction_id=proposal.extraction_id,
+                intelligence_run_id=proposal.intelligence_run_id,
+                source_proposal_id=proposal.id,
+                evidence=proposal.evidence,
+            )
+            session.add(organization)
+            await session.flush()
     await link_organization_document(session, organization.id, proposal)
     audit(
         session,
         resource_type="organization",
         resource_id=organization.id,
-        action="linked" if decision.action == "link_existing" else "created",
+        action="linked" if organization.source_proposal_id != proposal.id else "created",
         proposal=proposal,
         new_value={"canonical_name": organization.canonical_name},
     )
