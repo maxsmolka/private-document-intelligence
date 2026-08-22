@@ -59,6 +59,9 @@ async def test_review_queue_detail_text_and_confirm(
     assert queue.status_code == 200
     assert queue.json()["total"] == 1
     assert queue.json()["items"][0]["warnings"] == ["sample_warning"]
+    assert queue.json()["items"][0]["proposal_count"] == 1
+    assert queue.json()["items"][0]["knowledge_proposal_count"] == 0
+    assert queue.json()["items"][0]["extraction_review_required"] is False
     assert detail.status_code == 200
     assert detail.json()["proposals"][0]["status"] == "pending"
     assert text.json()["text"] == "Extracted review text"
@@ -97,7 +100,51 @@ async def test_reject_proposal_and_retry_endpoint(
     )
     assert rejected.status_code == 200
     assert rejected.json()[0]["status"] == "rejected"
+    assert (await client.get("/api/v1/review")).json()["total"] == 1
     retried = await client.post(f"/api/v1/documents/{document_id}/retry")
     assert retried.status_code == 200
     assert retried.json()["state"] == "queued"
     assert retried.json()["attempt_count"] == 0
+    repeated = await client.post(f"/api/v1/documents/{document_id}/retry")
+    assert repeated.status_code == 200
+    assert repeated.json()["id"] == retried.json()["id"]
+    assert repeated.json()["state"] == "queued"
+
+
+async def test_review_queue_order_counter_and_explicit_completion(
+    client: AsyncClient, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    async with session_factory() as session:
+        first = await seed_review(session, "order-first")
+        second = await seed_review(session, "order-second")
+        first_id, second_id = first.id, second.id
+
+    initial = (await client.get("/api/v1/review")).json()
+    assert initial["total"] == 2
+    ordered_ids = [item["document"]["id"] for item in initial["items"]]
+    assert ordered_ids == sorted([str(first_id), str(second_id)])
+    selected_id, remaining_id = ordered_ids
+    detail = (await client.get(f"/api/v1/review/{selected_id}")).json()
+    accepted = await client.post(
+        f"/api/v1/review/{selected_id}/proposals/{detail['proposals'][0]['id']}/accept",
+        json={},
+    )
+    assert accepted.status_code == 200
+    after_field = (await client.get("/api/v1/review")).json()
+    assert after_field["total"] == 2
+    assert after_field["items"][0]["proposal_count"] == 0
+    assert after_field["items"][1]["proposal_count"] == 1
+
+    completed = await client.post(
+        f"/api/v1/review/{selected_id}/confirm",
+        json={
+            "title": "Reviewed first",
+            "document_date": None,
+            "life_area": "other",
+            "document_type": None,
+        },
+    )
+    assert completed.status_code == 200
+    final_queue = (await client.get("/api/v1/review")).json()
+    assert final_queue["total"] == 1
+    assert final_queue["items"][0]["document"]["id"] == remaining_id

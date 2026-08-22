@@ -6,10 +6,10 @@ import { Check, FileUp, Plus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { DragEvent, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import type { DocumentRecord } from "@/lib/api/documents";
+import type { DocumentRecord, DocumentUploadResult } from "@/lib/api/documents";
 import { browserApiUrl } from "@/lib/api/documents";
 
-type UploadState = "idle" | "uploading" | "success" | "error";
+type UploadState = "idle" | "uploading" | "success" | "duplicate" | "error";
 const ACCEPTED = ["application/pdf", "image/jpeg", "image/png"];
 
 export function UploadDialog() {
@@ -21,9 +21,10 @@ export function UploadDialog() {
   const [progress, setProgress] = useState(0);
   const [filename, setFilename] = useState("");
   const [error, setError] = useState("");
+  const [result, setResult] = useState<DocumentRecord | null>(null);
 
   function reset() {
-    setState("idle"); setProgress(0); setFilename(""); setError(""); setDragging(false);
+    setState("idle"); setProgress(0); setFilename(""); setError(""); setResult(null); setDragging(false);
   }
 
   function upload(file: File) {
@@ -42,9 +43,14 @@ export function UploadDialog() {
     });
     request.addEventListener("load", () => {
       if (request.status >= 200 && request.status < 300) {
-        const document = JSON.parse(request.responseText) as DocumentRecord;
-        setProgress(100); setState("success");
-        window.setTimeout(() => router.push(`/documents/${document.id}`), 350);
+        const payload = JSON.parse(request.responseText) as DocumentUploadResult;
+        setProgress(100); setResult(payload.document);
+        if (payload.duplicate) {
+          setState("duplicate");
+        } else {
+          setState("success");
+          window.setTimeout(() => router.push(`/documents/${payload.document.id}`), 500);
+        }
       } else {
         let message = "The document could not be uploaded.";
         try { message = (JSON.parse(request.responseText) as { detail?: string }).detail ?? message; } catch { /* use default */ }
@@ -78,6 +84,7 @@ export function UploadDialog() {
             {state === "idle" && <div><span className="mx-auto mb-4 grid size-11 place-items-center rounded-xl border border-stone-200 bg-white shadow-sm"><FileUp className="size-5 text-stone-600" /></span><p className="text-sm font-medium text-stone-800">Drop a document here</p><p className="mt-1 text-xs text-stone-500">or choose one from your computer</p><Button variant="secondary" className="mt-5" onClick={() => input.current?.click()}>Choose file</Button></div>}
             {state === "uploading" && <div className="w-full max-w-xs"><FileUp className="mx-auto size-6 text-stone-500" /><p className="mt-3 truncate text-sm font-medium text-stone-800">{filename}</p><Progress.Root value={progress} className="mt-5 h-1.5 overflow-hidden rounded-full bg-stone-200"><Progress.Indicator className="h-full bg-stone-800 transition-transform" style={{ transform: `translateX(-${100 - progress}%)` }} /></Progress.Root><p className="mt-2 text-xs tabular-nums text-stone-500">Uploading {progress}%</p></div>}
             {state === "success" && <div><span className="mx-auto grid size-11 place-items-center rounded-full bg-emerald-100 text-emerald-700"><Check className="size-5" /></span><p className="mt-3 text-sm font-medium text-stone-800">Document added</p><p className="mt-1 text-xs text-stone-500">Opening document…</p></div>}
+            {state === "duplicate" && result ? <div><span className="mx-auto grid size-11 place-items-center rounded-full bg-amber-100 text-amber-700"><Check className="size-5" /></span><p className="mt-3 text-sm font-semibold text-stone-900">Document already exists</p><p className="mt-2 text-xs leading-5 text-stone-600">This file is identical to an existing document.<br />No duplicate was created.</p><p className="mt-2 text-[11px] text-stone-400">Originally added: {new Intl.DateTimeFormat("de-DE", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Berlin" }).format(new Date(result.created_at))}</p><Button className="mt-5" onClick={() => router.push(`/documents/${result.id}`)}>Open existing document</Button></div> : null}
             {state === "error" && <div><span className="mx-auto grid size-11 place-items-center rounded-full bg-red-50 text-red-600"><X className="size-5" /></span><p className="mt-3 text-sm font-medium text-stone-800">Upload failed</p><p className="mt-1 text-xs leading-5 text-red-600">{error}</p><Button variant="secondary" className="mt-5" onClick={reset}>Try again</Button></div>}
           </div>
         </Dialog.Content>

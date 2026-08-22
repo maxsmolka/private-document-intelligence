@@ -28,7 +28,7 @@ async def review_documents(
             selectinload(Document.canonical_extraction),
             selectinload(Document.metadata_proposals),
         )
-        .order_by(Document.updated_at, Document.id)
+        .order_by(Document.created_at, Document.id)
         .limit(limit)
         .offset(offset)
     )

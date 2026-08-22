@@ -160,6 +160,8 @@ class ReviewItem(BaseModel):
     document: DocumentRead
     warnings: list[str]
     proposal_count: int
+    knowledge_proposal_count: int
+    extraction_review_required: bool
 
 
 class ReviewList(BaseModel):

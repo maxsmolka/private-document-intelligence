@@ -31,3 +31,9 @@ class DocumentList(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class DocumentUploadResult(BaseModel):
+    document: DocumentRead
+    created: bool
+    duplicate: bool

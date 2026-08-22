@@ -43,6 +43,12 @@ export interface DocumentListResponse {
   offset: number;
 }
 
+export interface DocumentUploadResult {
+  document: DocumentRecord;
+  created: boolean;
+  duplicate: boolean;
+}
+
 export interface IngestionJob {
   id: string;
   document_id: string;
@@ -173,6 +179,8 @@ export interface ReviewItem {
   document: DocumentRecord;
   warnings: string[];
   proposal_count: number;
+  knowledge_proposal_count: number;
+  extraction_review_required: boolean;
 }
 
 export interface ReviewListResponse {
@@ -366,6 +374,15 @@ export function rejectProposal(documentId: string, proposalId: string) {
 
 export function retryDocument(id: string) {
   return mutate<IngestionJob>(`/api/v1/documents/${encodeURIComponent(id)}/retry`);
+}
+
+export async function getReviewDetailClient(id: string): Promise<ReviewDetail> {
+  const response = await fetch(browserApiUrl(`/api/v1/review/${encodeURIComponent(id)}`), {
+    cache: "no-store",
+    credentials: "include",
+  });
+  if (!response.ok) throw new ApiError(response.status, `PDI API returned ${response.status}`);
+  return response.json() as Promise<ReviewDetail>;
 }
 
 export function promoteExtraction(

@@ -53,7 +53,7 @@ async def create_document(
     file: UploadFile,
     max_size: int,
     max_attempts: int,
-) -> Document:
+) -> tuple[Document, bool]:
     filename, mime_type = await validate_upload(file)
     storage_key = f"{uuid.uuid4()}{EXTENSIONS[mime_type]}"
     stored = await storage.store(storage_key, file, max_size)
@@ -62,18 +62,21 @@ async def create_document(
     )
     if existing is not None:
         await storage.delete(stored.key)
-        return existing
-    return await persist_stored_document(
-        session,
-        storage,
-        stored_key=stored.key,
-        stored_size=stored.size,
-        stored_sha256=stored.sha256,
-        filename=filename,
-        mime_type=mime_type,
-        max_attempts=max_attempts,
-        source="upload",
-        enqueue=True,
+        return existing, True
+    return (
+        await persist_stored_document(
+            session,
+            storage,
+            stored_key=stored.key,
+            stored_size=stored.size,
+            stored_sha256=stored.sha256,
+            filename=filename,
+            mime_type=mime_type,
+            max_attempts=max_attempts,
+            source="upload",
+            enqueue=True,
+        ),
+        False,
     )
 
 

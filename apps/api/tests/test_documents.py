@@ -17,7 +17,10 @@ async def upload(client: AsyncClient, filename: str = "statement.pdf") -> dict[s
         "/api/v1/documents", files={"file": (filename, PDF, "application/pdf")}
     )
     assert response.status_code == 201, response.text
-    return cast(dict[str, object], response.json())
+    payload = cast(dict[str, object], response.json())
+    assert payload["created"] is True
+    assert payload["duplicate"] is False
+    return cast(dict[str, object], payload["document"])
 
 
 async def test_upload_persists_file_and_hash(
@@ -64,8 +67,16 @@ async def test_duplicate_upload_returns_existing_document_without_extra_storage(
     client: AsyncClient, tmp_path: Path
 ) -> None:
     first = await upload(client, "first.pdf")
-    duplicate = await upload(client, "duplicate-name.pdf")
+    response = await client.post(
+        "/api/v1/documents",
+        files={"file": ("duplicate-name.pdf", PDF, "application/pdf")},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    duplicate = payload["document"]
 
+    assert payload["created"] is False
+    assert payload["duplicate"] is True
     assert duplicate["id"] == first["id"]
     assert duplicate["original_filename"] == "first.pdf"
     assert len(list((tmp_path / "storage").glob("*.pdf"))) == 1

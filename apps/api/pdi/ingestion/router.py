@@ -2,11 +2,13 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pdi.core.database import get_session
+from pdi.documents.models import Document
 from pdi.documents.schemas import DocumentRead
-from pdi.ingestion.models import IngestionJob
+from pdi.ingestion.models import ExtractionComparison, IngestionJob, ProposalStatus
 from pdi.ingestion.review import (
     accept_document_proposal,
     confirm_document,
@@ -27,6 +29,7 @@ from pdi.ingestion.schemas import (
     ReviewItem,
     ReviewList,
 )
+from pdi.knowledge.models import KnowledgeProposal
 
 router = APIRouter(prefix="/api/v1/review", tags=["review"])
 Session = Annotated[AsyncSession, Depends(get_session)]
@@ -43,6 +46,34 @@ async def review_queue(
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> ReviewList:
     documents, total = await review_documents(session, limit=limit, offset=offset)
+    document_ids = [document.id for document in documents]
+    knowledge_counts: dict[UUID, int] = {}
+    extraction_review_ids: set[UUID] = set()
+    if document_ids:
+        knowledge_counts = {
+            document_id: count
+            for document_id, count in (
+                await session.execute(
+                    select(KnowledgeProposal.document_id, func.count())
+                    .where(
+                        KnowledgeProposal.document_id.in_(document_ids),
+                        KnowledgeProposal.status == ProposalStatus.PENDING,
+                    )
+                    .group_by(KnowledgeProposal.document_id)
+                )
+            ).all()
+        }
+        extraction_review_ids = set(
+            await session.scalars(
+                select(ExtractionComparison.document_id)
+                .join(Document, Document.id == ExtractionComparison.document_id)
+                .where(
+                    ExtractionComparison.document_id.in_(document_ids),
+                    ExtractionComparison.baseline_extraction_id == Document.canonical_extraction_id,
+                    ExtractionComparison.review_decision.is_(None),
+                )
+            )
+        )
     return ReviewList(
         items=[
             ReviewItem(
@@ -53,6 +84,8 @@ async def review_queue(
                 proposal_count=sum(
                     proposal.status.value == "pending" for proposal in document.metadata_proposals
                 ),
+                knowledge_proposal_count=knowledge_counts.get(document.id, 0),
+                extraction_review_required=document.id in extraction_review_ids,
             )
             for document in documents
         ],

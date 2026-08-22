@@ -2,7 +2,7 @@ import hashlib
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pdi.core.config import Settings, get_settings
 from pdi.core.database import get_session
 from pdi.documents.models import DocumentStatus, LifeArea
-from pdi.documents.schemas import DocumentList, DocumentRead
+from pdi.documents.schemas import DocumentList, DocumentRead, DocumentUploadResult
 from pdi.documents.service import create_document, get_document, list_documents
 from pdi.ingestion.models import (
     DocumentExtraction,
@@ -43,17 +43,24 @@ Storage = Annotated[StorageBackend, Depends(get_storage)]
 AppSettings = Annotated[Settings, Depends(get_settings)]
 
 
-@router.post("", response_model=DocumentRead, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=DocumentUploadResult, status_code=status.HTTP_201_CREATED)
 async def upload_document(
     session: Session,
     storage: Storage,
     settings: AppSettings,
+    response: Response,
     file: Annotated[UploadFile, File()],
-) -> DocumentRead:
-    document = await create_document(
+) -> DocumentUploadResult:
+    document, duplicate = await create_document(
         session, storage, file, settings.max_upload_size, settings.worker_max_attempts
     )
-    return DocumentRead.model_validate(document)
+    if duplicate:
+        response.status_code = status.HTTP_200_OK
+    return DocumentUploadResult(
+        document=DocumentRead.model_validate(document),
+        created=not duplicate,
+        duplicate=duplicate,
+    )
 
 
 @router.get("", response_model=DocumentList)

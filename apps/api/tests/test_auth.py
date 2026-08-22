@@ -126,8 +126,8 @@ async def test_authenticated_pdf_image_preview_and_range(
     )
     assert pdf_upload.status_code == image_upload.status_code == 201
 
-    pdf_id = pdf_upload.json()["id"]
-    image_id = image_upload.json()["id"]
+    pdf_id = pdf_upload.json()["document"]["id"]
+    image_id = image_upload.json()["document"]["id"]
     pdf = await auth_client.get(f"/api/v1/documents/{pdf_id}/content")
     image = await auth_client.get(f"/api/v1/documents/{image_id}/content")
     partial = await auth_client.get(

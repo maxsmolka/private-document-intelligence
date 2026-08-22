@@ -46,4 +46,4 @@ export const getContract = (id: string) => serverRequest<ContractDetail>(`/api/v
 export const getTimeline = (params?: URLSearchParams) => serverRequest<Page<TimelineEvent>>(`/api/v1/timeline${params?.size ? `?${params}` : ""}`);
 export const getDeadlines = () => serverRequest<Page<Deadline>>("/api/v1/deadlines?status=open");
 export const getActionItems = () => serverRequest<Page<ActionItem>>("/api/v1/action-items?status=open");
-export const getKnowledgeReview = () => serverRequest<Page<KnowledgeProposal>>("/api/v1/knowledge/review");
+export const getKnowledgeReview = (proposalType?: string) => serverRequest<Page<KnowledgeProposal>>(`/api/v1/knowledge/review${proposalType ? `?proposal_type=${encodeURIComponent(proposalType)}` : ""}`);

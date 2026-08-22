@@ -64,11 +64,11 @@ export default async function DocumentDetailPage({
         Documents
       </Link>
       <div className="mt-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-[-0.035em] text-stone-950">
+        <div className="min-w-0">
+          <h1 className="break-words text-3xl font-semibold tracking-[-0.035em] text-stone-950" title={document.title}>
             {document.title}
           </h1>
-          <p className="mt-2 text-sm text-stone-500">{document.original_filename}</p>
+          <p className="mt-2 break-all text-sm text-stone-500">{document.original_filename}</p>
         </div>
         <div className="flex gap-2">
           <span className="rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-stone-600">

@@ -93,9 +93,9 @@ async def persist_derived_asset(
     document_id: uuid.UUID,
     result: ExtractionResult,
     settings: Settings,
-) -> DocumentAsset | None:
+) -> tuple[DocumentAsset | None, str | None]:
     if result.derived_path is None:
-        return None
+        return None, None
     storage = get_storage()
     derived_path = result.derived_path
 
@@ -115,6 +115,9 @@ async def persist_derived_asset(
     if asset is None:
         asset = DocumentAsset(document_id=document_id, kind=DocumentAssetKind.OCR_PDF)
         session.add(asset)
+    obsolete_key = (
+        asset.storage_key if asset.storage_key and asset.storage_key != stored.key else None
+    )
     asset.storage_key = stored.key
     asset.mime_type = "application/pdf"
     asset.file_size = stored.size
@@ -123,7 +126,7 @@ async def persist_derived_asset(
     asset.provider_version = result.provider_version
     result.metadata["derived_asset_kind"] = DocumentAssetKind.OCR_PDF.value
     result.metadata["derived_asset_sha256"] = stored.sha256
-    return asset
+    return asset, obsolete_key
 
 
 async def ensure_metadata_proposals(session: AsyncSession, document: Document) -> None:
@@ -192,7 +195,9 @@ async def process_job(
             work_dir=Path(temporary),
             native_result=native_result,
         )
-        await persist_derived_asset(session, document.id, result, settings)
+        _, obsolete_derived_key = await persist_derived_asset(
+            session, document.id, result, settings
+        )
     logger.info(
         "extraction_completed",
         extra={
@@ -225,6 +230,8 @@ async def process_job(
     job.stage = "document_intelligence"
     job.heartbeat_at = datetime.now(UTC)
     await session.commit()
+    if obsolete_derived_key is not None:
+        await get_storage().delete(obsolete_derived_key)
     await session.refresh(document)
     if document.canonical_extraction_id != extraction.id:
         if document.canonical_extraction_id is None:

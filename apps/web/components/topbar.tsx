@@ -49,14 +49,14 @@ export function Topbar() {
       <div className="mx-auto flex w-full max-w-6xl items-center">
         <form onSubmit={submit} className="relative w-full max-w-md">
           <label>
-            <span className="sr-only">Search documents</span>
+            <span className="sr-only">Search all document text and metadata</span>
             <Search className="pointer-events-none absolute left-2 top-1/2 size-4 -translate-y-1/2 text-stone-400" />
             <input
               ref={input}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               maxLength={200}
-              placeholder="Search your documents"
+              placeholder="Search all document text…"
               className="h-9 w-full rounded-lg bg-transparent pl-8 pr-14 text-sm text-stone-700 outline-none placeholder:text-stone-400 focus:bg-white focus:ring-2 focus:ring-stone-100"
             />
           </label>

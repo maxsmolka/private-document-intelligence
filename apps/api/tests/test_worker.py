@@ -89,12 +89,18 @@ async def test_worker_persists_ocr_asset_and_retry_is_idempotent(
     from pdi.ingestion import worker
 
     monkeypatch.setattr(worker, "get_storage", lambda: storage)
+    ocr_runs = 0
 
     async def fake_ocr(_path: Path, _mime_type: str, **options: object) -> ExtractionResult:
+        nonlocal ocr_runs
+        ocr_runs += 1
         work_dir = options["work_dir"]
         assert isinstance(work_dir, Path)
         derived = work_dir / "ocr-output.pdf"
-        derived.write_bytes(text_pdf("Searchable OCR text with invoice 1.234,56 EUR"))
+        derived.write_bytes(
+            text_pdf("Searchable OCR text with invoice 1.234,56 EUR")
+            + f"\n% OCR run {ocr_runs}".encode()
+        )
         return ExtractionResult(
             text="Searchable OCR text with invoice 1.234,56 EUR",
             page_count=1,
@@ -159,5 +165,7 @@ async def test_worker_persists_ocr_asset_and_retry_is_idempotent(
         )
         assert len(assets) == 1
         assert await session.scalar(select(func.count()).select_from(DocumentExtraction)) == 1
-        assert assets[0].storage_key == first_key
+        assert assets[0].storage_key != first_key
+        assert not storage.path_for(first_key).exists()
+        assert storage.path_for(assets[0].storage_key).is_file()
         assert original.read_bytes() == original_bytes
