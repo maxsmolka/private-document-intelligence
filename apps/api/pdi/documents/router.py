@@ -32,6 +32,7 @@ from pdi.ingestion.schemas import (
 from pdi.ingestion.versions import (
     compare_extractions,
     keep_current_extraction,
+    meaningful_text_differences,
     promote_extraction,
 )
 from pdi.storage.base import StorageBackend
@@ -141,6 +142,30 @@ async def extraction_history(document_id: UUID, session: Session) -> ExtractionH
             )
         ).all()
     )
+    extraction_by_id = {item.id: item for item in versions}
+    comparison_reads = []
+    for item in comparisons:
+        baseline = extraction_by_id.get(item.baseline_extraction_id)
+        candidate = extraction_by_id.get(item.candidate_extraction_id)
+        metrics = dict(item.metrics)
+        if baseline is not None and candidate is not None:
+            metrics["meaningful_differences"] = meaningful_text_differences(
+                baseline.normalized_text, candidate.normalized_text
+            )
+        comparison_reads.append(
+            ExtractionComparisonRead(
+                id=item.id,
+                document_id=item.document_id,
+                baseline_extraction_id=item.baseline_extraction_id,
+                candidate_extraction_id=item.candidate_extraction_id,
+                status=item.status,
+                metrics=metrics,
+                review_decision=item.review_decision,
+                reviewed_by=item.reviewed_by,
+                reviewed_at=item.reviewed_at,
+                created_at=item.created_at,
+            )
+        )
     return ExtractionHistoryRead(
         canonical_extraction_id=document.canonical_extraction_id,
         versions=[
@@ -163,7 +188,7 @@ async def extraction_history(document_id: UUID, session: Session) -> ExtractionH
             )
             for item in versions
         ],
-        comparisons=[ExtractionComparisonRead.model_validate(item) for item in comparisons],
+        comparisons=comparison_reads,
         promotions=[ExtractionPromotionRead.model_validate(item) for item in promotions],
     )
 

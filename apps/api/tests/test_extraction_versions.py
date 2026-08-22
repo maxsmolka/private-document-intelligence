@@ -19,6 +19,7 @@ from pdi.ingestion.versions import (
     compare_extractions,
     create_extraction_version,
     keep_current_extraction,
+    meaningful_text_differences,
     promote_extraction,
 )
 from pdi.search.models import SearchDocument
@@ -37,6 +38,17 @@ def document_record(suffix: str) -> Document:
         life_area=LifeArea.OTHER,
         source="test",
     )
+
+
+def test_meaningful_text_differences_groups_sensitive_values() -> None:
+    summary = meaningful_text_differences(
+        "Rechnung 1.250,00 EUR am 12.03.2025, Referenz AB-123456.",
+        "Rechnung 1.200,00 EUR am 13.03.2025, Referenz AB-123456.",
+    )
+    assert summary["amounts"]["missing"] == ["1.250,00 EUR"]  # type: ignore[index]
+    assert summary["amounts"]["added"] == ["1.200,00 EUR"]  # type: ignore[index]
+    assert summary["dates"]["missing"] == ["12.03.2025"]  # type: ignore[index]
+    assert summary["identifiers"]["unchanged_count"] == 1  # type: ignore[index]
 
 
 async def version(

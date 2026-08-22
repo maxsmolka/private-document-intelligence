@@ -116,6 +116,13 @@ export interface ExtractionComparison {
     candidate_non_whitespace_coverage?: number | null;
     similarity?: number;
     critical_field_preservation?: number | null;
+    meaningful_differences?: Record<"amounts" | "dates" | "identifiers", {
+      missing: string[];
+      added: string[];
+      missing_count: number;
+      added_count: number;
+      unchanged_count: number;
+    }>;
   };
   review_decision: "keep_current" | "promote_candidate" | null;
   reviewed_by: string | null;

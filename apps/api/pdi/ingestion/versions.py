@@ -120,6 +120,40 @@ def non_whitespace_characters(value: str) -> int:
     return len(re.sub(r"\s", "", value))
 
 
+_AMOUNT_PATTERN = re.compile(r"(?<!\w)(?:€\s*\d[\d.,]*|\d[\d.,]*\s*(?:€|EUR))(?!\w)", re.IGNORECASE)
+_DATE_PATTERN = re.compile(r"(?<!\d)(?:\d{4}-\d{2}-\d{2}|\d{1,2}[./-]\d{1,2}[./-]\d{2,4})(?!\d)")
+_IDENTIFIER_PATTERN = re.compile(
+    r"(?<!\w)(?=[A-Z0-9./-]{6,}\b)(?=[A-Z0-9./-]*\d)[A-Z0-9]+(?:[./-][A-Z0-9]+)+(?!\w)",
+    re.IGNORECASE,
+)
+
+
+def meaningful_text_differences(baseline_text: str, candidate_text: str) -> dict[str, object]:
+    """Return a bounded, display-safe summary of review-sensitive token changes."""
+
+    def values(pattern: re.Pattern[str], text: str) -> set[str]:
+        return {" ".join(match.group(0).split()) for match in pattern.finditer(text)}
+
+    result: dict[str, object] = {}
+    for name, pattern in (
+        ("amounts", _AMOUNT_PATTERN),
+        ("dates", _DATE_PATTERN),
+        ("identifiers", _IDENTIFIER_PATTERN),
+    ):
+        baseline = values(pattern, baseline_text)
+        candidate = values(pattern, candidate_text)
+        missing = sorted(baseline - candidate)
+        added = sorted(candidate - baseline)
+        result[name] = {
+            "missing": missing[:12],
+            "added": added[:12],
+            "missing_count": len(missing),
+            "added_count": len(added),
+            "unchanged_count": len(baseline & candidate),
+        }
+    return result
+
+
 def comparison_metrics(
     baseline: DocumentExtraction,
     candidate: DocumentExtraction,
