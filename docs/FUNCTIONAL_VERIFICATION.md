@@ -2,6 +2,40 @@
 
 Verified on 2026-08-22 against the local PDI pilot instance. Paperless was not accessed. Browser checks used authenticated, user-visible workflows; automated checks used both SQLite and an isolated temporary PostgreSQL database.
 
+## v1.0 UX implementation verification
+
+Verified on 2026-08-22 after deploying the product-experience build locally. This verification establishes readiness for final user acceptance; it does not declare final v1.0 acceptance.
+
+- The production web build passed ESLint, TypeScript, Next.js compilation, static generation, and the runtime-image build with locally bundled PDF.js.
+- The backend default suite passed with 59 tests and four environment-dependent skips. The isolated PostgreSQL suite passed all 63 tests; the temporary database was removed afterward.
+- Ruff, Ruff formatting, and strict mypy passed across 101 backend source files.
+- The deployed Compose stack is healthy. Readiness is PASS; search reports 19 indexed, zero missing, and zero stale documents; storage reconciliation reports no missing/orphaned/stale files, invalid canonical pointers, orphaned extractions, or stale projections.
+- Alembic reports no new upgrade operations. No schema migration was introduced by the read-only extraction-difference summary.
+- The refreshed sign-in screen was inspected visually at the actual local URL. Its labels, focusable controls, spacing, and hierarchy render cleanly and the browser DOM contains no obsolete Ask PDI or Settings navigation entries.
+- The browser session had expired before authenticated visual verification. Credentials were not read or exposed. Authenticated viewer, review, source-page navigation, and responsive drawer verification therefore remain in the final user-driven UAT checklist below.
+- No sensitive screenshot was committed. Paperless was not accessed and no migration behavior changed.
+
+### Final v1.0 user acceptance checklist
+
+1. Sign in and refresh every primary route. Confirm the fixed sidebar remains visible on a long desktop page and logout returns to sign-in.
+2. At a narrow viewport, open and close the navigation drawer, follow links, and confirm no page-level horizontal scrolling occurs.
+3. Open Documents. Confirm **Filter documents** only narrows the loaded list, status/life-area filters remain correct, and long titles and filenames do not disturb columns.
+4. Upload a small non-sensitive PDF twice. Confirm progress, success, and duplicate states remain distinct and the second upload creates no record.
+5. Open a multi-page PDF. Test previous/next, direct page entry, zoom in/out, fit width, fit page, fullscreen, and original download. Confirm browser-native PDF chrome is absent.
+6. Open an image document and confirm protected preview, download, loading, retry, and missing-file states remain usable.
+7. Use Search PDI for body text and an exact identifier. Use J/K and Enter, then select a page snippet and confirm Document Detail opens on that page.
+8. In Document Review, inspect the queue position and Metadata/Knowledge/Extraction badges. Use Previous/Next and J/K without changing review state.
+9. Focus a safe metadata proposal and exercise A/E/R only on a disposable test proposal. Confirm actions remain field-scoped, do not overflow, and do not complete the document.
+10. Use Shift+Enter only on a safe test document. Confirm **Mark document reviewed** remains the explicit document-level completion action.
+11. Follow metadata and knowledge evidence links. Confirm page navigation and exact quote are present and no unreliable PDF highlight is implied.
+12. Inspect a legacy-versus-PDI extraction choice. Confirm text match, coverage, character change, critical-value preservation, and amount/date/identifier changes are readable. Confirm no candidate is promoted without an explicit choice.
+13. Filter Knowledge Review by proposal type and confirm Accept/Edit/Link/Reject labels remain readable at desktop and narrow widths.
+14. Inspect Organizations and Contracts list/detail/source links; confirm long names, references, empty relationships, and unresolved dates remain legible.
+15. Inspect Timeline presets and filters. Confirm events group by month in source chronology and every event remains confirmed and document-backed.
+16. Inspect Upcoming. Confirm it contains only confirmed deadlines/actions and source links open the relevant document page.
+17. Trigger a safe preview failure or stop/restart a local service. Confirm loading, error, retry, and recovery language remains consistent and states that originals are unaffected.
+18. Repeat core navigation with keyboard only and with reduced motion enabled. Confirm visible focus, logical order, labeled controls, and no essential animation dependency.
+
 ## Review semantics
 
 - A main Review queue item is one document whose status is `needs_review`. Queue order is deterministic and stable across field decisions: oldest `created_at`, then document ID.

@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import { Sidebar } from "@/components/sidebar";
-import { Topbar } from "@/components/topbar";
+import { AppShell } from "@/components/app-shell";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -12,13 +11,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <body>
-        <div className="flex min-h-dvh">
-          <Sidebar />
-          <div className="min-w-0 flex-1">
-            <Topbar />
-            <main>{children}</main>
-          </div>
-        </div>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

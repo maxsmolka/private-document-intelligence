@@ -11,8 +11,8 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
   try { data = await getDocuments({ status: filters.status, lifeArea: filters.life_area }); }
   catch { data = { items: [], total: 0, limit: 50, offset: 0 }; }
   return (
-    <div className="mx-auto max-w-6xl px-5 py-8 md:px-8 md:py-10">
-      <div className="flex items-center justify-between"><div><h1 className="text-2xl font-semibold tracking-[-0.025em] text-stone-950">Documents</h1><p className="mt-1 text-sm text-stone-500">{data.total} {data.total === 1 ? "document" : "documents"} in your private archive</p></div><UploadDialog /></div>
+    <div className="page">
+      <div className="flex items-center justify-between gap-4"><div><p className="eyebrow">Library</p><h1 className="page-title mt-1">Documents</h1><p className="page-description">{data.total} {data.total === 1 ? "document" : "documents"} in your private archive</p></div><UploadDialog /></div>
       <DocumentExplorer documents={data.items} />
     </div>
   );

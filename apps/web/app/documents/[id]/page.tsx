@@ -1,4 +1,4 @@
-import { ArrowLeft, CalendarDays, Database, FileText, Hash } from "lucide-react";
+import { ArrowLeft, CalendarDays, Database, FileText, Hash, ShieldCheck } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -42,10 +42,14 @@ export async function generateMetadata({
 
 export default async function DocumentDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ page?: string }>;
 }) {
   const { id } = await params;
+  const requestedPage = Number((await searchParams).page ?? "1");
+  const initialPage = Number.isFinite(requestedPage) && requestedPage > 0 ? Math.floor(requestedPage) : 1;
   const [document, extractionHistory] = await Promise.all([load(id), getExtractionHistory(id)]);
   const metadata = [
     [FileText, "Filename", document.original_filename],
@@ -55,7 +59,7 @@ export default async function DocumentDetailPage({
   ] as const;
 
   return (
-    <div className="mx-auto max-w-7xl px-5 py-8 md:px-8">
+    <div className="page">
       <Link
         href="/documents"
         className="inline-flex items-center gap-2 text-sm text-stone-500 transition hover:text-stone-900"
@@ -63,9 +67,9 @@ export default async function DocumentDetailPage({
         <ArrowLeft className="size-4" />
         Documents
       </Link>
-      <div className="mt-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+      <div className="mt-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div className="min-w-0">
-          <h1 className="break-words text-3xl font-semibold tracking-[-0.035em] text-stone-950" title={document.title}>
+          <h1 className="line-clamp-2 break-words text-3xl font-semibold tracking-[-0.035em] text-stone-950" title={document.title}>
             {document.title}
           </h1>
           <p className="mt-2 break-all text-sm text-stone-500">{document.original_filename}</p>
@@ -90,9 +94,16 @@ export default async function DocumentDetailPage({
           <RetryProcessingButton documentId={document.id} />
         </div>
       ) : null}
+      <section className="panel mt-6 overflow-hidden">
+        <div className="flex min-h-11 items-center justify-between gap-3 border-b border-stone-200 bg-white px-4 py-2 text-xs font-medium text-stone-500">
+          <span>Original document</span>
+          <span className="flex items-center gap-1.5 text-[11px] font-normal text-stone-400"><ShieldCheck className="size-3.5" />Protected local delivery</span>
+        </div>
+        <DocumentPreview documentId={document.id} mimeType={document.mime_type} title={document.title} initialPage={initialPage} heightClass="h-[72vh] min-h-[520px] max-h-[900px]" />
+      </section>
       <ExtractionReviewPanel documentId={document.id} history={extractionHistory} />
-      <div className="mt-9 grid gap-6 lg:grid-cols-[minmax(260px,0.38fr)_minmax(0,1fr)]">
-        <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm shadow-stone-950/[0.02]">
+      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(260px,0.36fr)_minmax(0,1fr)]">
+        <section className="panel p-5">
           <h2 className="text-sm font-semibold text-stone-900">Document information</h2>
           <dl className="mt-5 space-y-5">
             {metadata.map(([Icon, term, value]) => (
@@ -112,13 +123,20 @@ export default async function DocumentDetailPage({
             ))}
           </dl>
         </section>
-        <section className="min-h-[68vh] overflow-hidden rounded-2xl border border-stone-200 bg-stone-100 shadow-sm shadow-stone-950/[0.03]">
-          <div className="flex h-11 items-center border-b border-stone-200 bg-white px-4 text-xs font-medium text-stone-500">
-            File preview
+        <section className="panel p-5">
+          <h2 className="text-sm font-semibold text-stone-900">Document status</h2>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <StatusFact label="Processing" value={label(document.status)} />
+            <StatusFact label="Life area" value={label(document.life_area)} />
+            <StatusFact label="Document type" value={document.document_type ? label(document.document_type) : "Not confirmed"} />
           </div>
-          <DocumentPreview documentId={document.id} mimeType={document.mime_type} title={document.title} heightClass="min-h-[calc(68vh-2.75rem)] h-[calc(68vh-2.75rem)]" />
+          <p className="mt-5 border-t border-stone-100 pt-4 text-xs leading-5 text-stone-500">The viewer shows the immutable source file. Extracted text, metadata, and knowledge remain reviewable layers with their own provenance.</p>
         </section>
       </div>
     </div>
   );
+}
+
+function StatusFact({ label: term, value }: { label: string; value: string }) {
+  return <div className="rounded-xl bg-stone-50 p-3"><p className="text-[10px] font-semibold uppercase tracking-wide text-stone-400">{term}</p><p className="mt-1 break-words text-sm font-medium text-stone-800">{value}</p></div>;
 }

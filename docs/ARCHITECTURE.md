@@ -26,6 +26,8 @@ The API and worker use one immutable Python image with separate entrypoints. The
 
 Browser users authenticate with local database sessions and CSRF protection. Machine callers use digest-only scoped tokens. All upload, consume, mail, and migration entrypoints converge on shared file validation, storage, deduplication, and persistence; only ordinary new ingestion enters the existing extraction queue. Backup/restore coordinates PostgreSQL and storage through a transparent checksummed format. See ADRs 0006–0009.
 
+The web shell uses a fixed desktop navigation rail and a client-controlled narrow-layout drawer. Protected document delivery remains behind the same-origin Next.js proxy. PDF documents are fetched with the authenticated session and rendered locally with bundled PDF.js; the browser never receives a public storage URL and no remote rendering service is involved. Evidence links carry only a page number. Highlighting is withheld because extraction character offsets do not provide reliable PDF glyph coordinates.
+
 ## Ingestion lifecycle
 
 ```mermaid
