@@ -142,7 +142,7 @@ jobs:
           WEB_DIGEST: ${{ steps.web-build.outputs.digest }}
         run: echo "Web digest $WEB_DIGEST" >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           body_path: docs/releases/v1.0.0.md
           generate_release_notes: true
