@@ -2,6 +2,12 @@
 
 All notable changes are documented here. PDI follows Semantic Versioning.
 
+## [1.0.1] - 2026-08-23
+
+### Security
+
+- Restrict post-login redirect destinations to validated internal PDI paths.
+
 ## [1.0.0] - 2026-08-23
 
 ### Document ingestion and OCR
@@ -22,4 +28,5 @@ All notable changes are documented here. PDI follows Semantic Versioning.
 
 - Local Argon2id accounts, revocable sessions and API tokens, CSRF protection, upload validation, bounded OCR, non-root containers, and privacy-safe logging.
 
+[1.0.1]: https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.0.1
 [1.0.0]: https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.0.0

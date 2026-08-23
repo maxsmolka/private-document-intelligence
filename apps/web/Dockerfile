@@ -14,7 +14,7 @@ ENV NEXT_PUBLIC_PDI_API_URL=$NEXT_PUBLIC_PDI_API_URL
 RUN npm run lint && npm run build
 
 FROM node:22-alpine AS runtime
-ARG PDI_VERSION=1.0.0
+ARG PDI_VERSION=1.0.1
 ARG PDI_REVISION=unknown
 ARG PDI_SOURCE=https://github.com/maxsmolka/private-document-intelligence
 LABEL org.opencontainers.image.title="PDI web" \

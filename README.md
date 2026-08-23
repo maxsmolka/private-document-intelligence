@@ -58,7 +58,7 @@ docker compose --env-file .env.release -f compose.release.yaml up -d
 docker compose --env-file .env.release -f compose.release.yaml run --rm api pdi user create admin
 ```
 
-The release Compose file pins the v1.0.0 backend and web images, exposes only the web port, uses persistent volumes, and defaults to secure cookies. Protect `.env.release`, keep API/database access private, terminate TLS at a trusted proxy, and back up PostgreSQL and document storage together.
+The release Compose file pins the v1.0.1 backend and web images, exposes only the web port, uses persistent volumes, and defaults to secure cookies. Protect `.env.release`, keep API/database access private, terminate TLS at a trusted proxy, and back up PostgreSQL and document storage together.
 
 ## Development
 
@@ -88,6 +88,6 @@ Quality commands and contribution rules are in [CONTRIBUTING.md](CONTRIBUTING.md
 - [Operations](docs/OPERATIONS.md), [backup/restore](docs/BACKUP_RESTORE.md), and [cutover](docs/CUTOVER.md)
 - [Paperless migration](docs/PAPERLESS_MIGRATION.md) and [open export](docs/EXPORT.md)
 - [Architecture](docs/ARCHITECTURE.md) and [future Atlas boundary](docs/ATLAS_INTEGRATION.md)
-- [Release process](docs/RELEASES.md) and [v1.0.0 notes](docs/releases/v1.0.0.md)
+- [Release process](docs/RELEASES.md) and [v1.0.1 notes](docs/releases/v1.0.1.md)
 
 PDI is released under the [MIT License](LICENSE). Never attach private documents to public issues; report vulnerabilities through [the private process](SECURITY.md).

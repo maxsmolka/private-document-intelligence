@@ -8,6 +8,8 @@ docker compose run --rm api pdi user create admin
 
 Passwords are Argon2id hashes (time cost 3, 64 MiB, parallelism 2) with a 12-character minimum. Successful login rotates to random session and CSRF values; only SHA-256 digests are stored. Session cookies are HttpOnly, SameSite Strict, bounded by TTL, and revocable. The separate CSRF cookie/header protects unsafe browser requests. Set `PDI_AUTH_SECURE_COOKIES=true` behind HTTPS. Login attempts are rate-limited by normalized username and hashed source address.
 
+Post-login redirect destinations are restricted to validated internal PDI paths. Invalid, ambiguous, or external destinations fall back to the application overview.
+
 Create machine credentials with only required scopes:
 
 ```bash
