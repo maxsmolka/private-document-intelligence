@@ -1,6 +1,6 @@
 [project]
 name = "pdi-api"
-version = "1.0.0"
+version = "1.0.1"
 description = "Private Document Intelligence API"
 requires-python = ">=3.13"
 dependencies = [

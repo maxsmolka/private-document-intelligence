@@ -2,8 +2,13 @@
 
 import { FormEvent, useState } from "react";
 import { browserApiUrl } from "@/lib/api/documents";
+import { resolveSafeInternalRedirect } from "@/lib/auth/redirect";
 
-export default function LoginPage() {
+type LoginFormProps = {
+  navigate: (destination: string) => void;
+};
+
+export function LoginForm({ navigate }: LoginFormProps) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -17,8 +22,8 @@ export default function LoginPage() {
       setError(response?.status === 429 ? "Too many attempts. Try again later." : "Invalid username or password.");
       setBusy(false); return;
     }
-    const next = new URLSearchParams(window.location.search).get("next") || "/";
-    window.location.assign(next.startsWith("/") ? next : "/");
+    const next = new URLSearchParams(window.location.search).get("next");
+    navigate(resolveSafeInternalRedirect(next));
   }
   return <div className="fixed inset-0 z-50 grid place-items-center bg-[#f6f4ef] px-5">
     <form onSubmit={submit} className="w-full max-w-sm rounded-2xl border border-stone-200 bg-[#fbfaf7] p-7 shadow-xl shadow-stone-900/5">
@@ -31,4 +36,8 @@ export default function LoginPage() {
       <button disabled={busy} className="mt-6 w-full rounded-lg bg-stone-900 py-2.5 text-sm font-medium text-white disabled:opacity-50">{busy ? "Signing in…" : "Sign in"}</button>
     </form>
   </div>;
+}
+
+export default function LoginPage() {
+  return <LoginForm navigate={(destination) => window.location.assign(destination)} />;
 }
