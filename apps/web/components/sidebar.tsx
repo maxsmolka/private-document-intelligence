@@ -3,6 +3,7 @@
 import { Building2, CalendarClock, Clock3, FileCheck2, FileSearch, FileText, LayoutDashboard, Lightbulb, ScrollText, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { activeNavigationRoute } from "@/lib/navigation";
 
 const groups = [
   { label: "Library", items: [
@@ -22,6 +23,7 @@ const groups = [
 
 export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const pathname = usePathname();
+  const activeRoute = activeNavigationRoute(pathname);
   return (
     <>
       {open ? <button type="button" aria-label="Close navigation" onClick={onClose} className="fixed inset-0 z-40 bg-stone-950/30 backdrop-blur-[2px] md:hidden" /> : null}
@@ -37,7 +39,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
           {groups.map((group) => <div key={group.label}>
             <p className="px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-stone-400">{group.label}</p>
             <div className="mt-1.5 space-y-0.5">{group.items.map(({ label, icon: Icon, href }) => {
-              const active = href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
+              const active = activeRoute === href;
               return <Link key={label} href={href} onClick={onClose} aria-current={active ? "page" : undefined} className={`group flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition ${active ? "bg-white text-stone-950 shadow-sm" : "text-stone-600 hover:bg-white/60 hover:text-stone-950"}`}><Icon className={`size-4 ${active ? "text-emerald-800" : "text-stone-400"}`} strokeWidth={1.8} /><span>{label}</span></Link>;
             })}</div>
           </div>)}
