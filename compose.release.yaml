@@ -1,0 +1,102 @@
+name: pdi
+
+x-backend-environment: &backend-environment
+  PDI_ENV: production
+  PDI_DATABASE_URL: postgresql+asyncpg://pdi:${PDI_POSTGRES_PASSWORD:?set in .env.release}@postgres:5432/pdi
+  PDI_STORAGE_PATH: /data/documents
+  PDI_LOG_LEVEL: ${PDI_LOG_LEVEL:-INFO}
+  PDI_WORKER_POLL_INTERVAL: 2
+  PDI_WORKER_MAX_ATTEMPTS: 3
+  PDI_WORKER_JOB_TIMEOUT: 300
+  PDI_WORKER_CONCURRENCY: 1
+  PDI_OCR_ENABLED: "true"
+  PDI_OCR_PROVIDER: ocrmypdf
+  PDI_OCR_LANGUAGE: deu+eng
+  PDI_OCR_COMMAND_TIMEOUT: 180
+  PDI_OCR_MAX_PAGES: 100
+  PDI_OCR_MAX_IMAGE_MPIXELS: 100
+  PDI_OCR_MAX_DERIVED_SIZE: 104857600
+  PDI_INTELLIGENCE_PROVIDER: deterministic
+  PDI_AUTH_ENABLED: "true"
+  PDI_AUTH_SECURE_COOKIES: ${PDI_AUTH_SECURE_COOKIES:-true}
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: pdi
+      POSTGRES_USER: pdi
+      POSTGRES_PASSWORD: ${PDI_POSTGRES_PASSWORD:?set in .env.release}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pdi -d pdi"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    image: ghcr.io/maxsmolka/private-document-intelligence/backend:${PDI_VERSION:-1.0.0}
+    environment:
+      <<: *backend-environment
+      PDI_CORS_ORIGINS: '["${PDI_PUBLIC_URL:?set in .env.release}"]'
+      PDI_BACKUP_PATH: /backups
+    volumes:
+      - document_storage:/data/documents
+      - backup_data:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  worker:
+    image: ghcr.io/maxsmolka/private-document-intelligence/backend:${PDI_VERSION:-1.0.0}
+    command: ["pdi-worker"]
+    environment:
+      <<: *backend-environment
+      PDI_WORKER_IDENTITY: compose-worker
+    volumes:
+      - document_storage:/data/documents
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-m", "pdi.ingestion.health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+    stop_grace_period: 330s
+    restart: unless-stopped
+
+  web:
+    image: ghcr.io/maxsmolka/private-document-intelligence/web:${PDI_VERSION:-1.0.0}
+    environment:
+      PDI_API_INTERNAL_URL: http://api:8000
+      PDI_AUTH_ENABLED: "true"
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/login"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  document_storage:
+  backup_data:

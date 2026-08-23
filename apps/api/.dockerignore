@@ -1,4 +1,8 @@
 .venv
+.env*
+.coverage
+htmlcov
+secrets
 __pycache__
 .pytest_cache
 .mypy_cache

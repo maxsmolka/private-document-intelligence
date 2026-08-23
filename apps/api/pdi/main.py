@@ -13,12 +13,13 @@ from pdi.intelligence.router import router as intelligence_router
 from pdi.knowledge.router import router as knowledge_router
 from pdi.operations.router import router as operations_router
 from pdi.search.router import router as search_router
+from pdi.version import PDI_VERSION
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging(settings.log_level)
-    application = FastAPI(title="PDI API", version="0.1.0")
+    application = FastAPI(title="PDI API", version=PDI_VERSION)
     application.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,

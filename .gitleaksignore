@@ -1,0 +1,2 @@
+# False positive: a token variable loaded from a user-owned file is passed to the REST client.
+935d655583f26c80a2fa59208a4d0680f2d8b828:apps/api/pdi/cli.py:generic-api-key:67

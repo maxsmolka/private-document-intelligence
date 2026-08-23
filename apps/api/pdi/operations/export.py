@@ -38,6 +38,7 @@ from pdi.knowledge.models import (
 from pdi.operations.backup import write_checksums
 from pdi.operations.models import DocumentNote, DocumentTag, MigrationItem, MigrationRun, Tag
 from pdi.storage.base import StorageBackend
+from pdi.version import PDI_VERSION
 
 EXPORT_FORMAT_VERSION = "1"
 EXPORT_MODELS = (
@@ -118,7 +119,7 @@ async def create_export(
     manifest = {
         "format": "pdi-export",
         "format_version": EXPORT_FORMAT_VERSION,
-        "pdi_version": "0.1.0-m6",
+        "pdi_version": PDI_VERSION,
         "created_at": datetime.now().astimezone().isoformat(),
         "counts": counts,
         "original_count": len(original_assets),

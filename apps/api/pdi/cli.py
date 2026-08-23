@@ -64,7 +64,7 @@ def paperless_source(arguments: argparse.Namespace) -> PaperlessSource:
     token = token_file.read_text(encoding="utf-8").strip()
     if not token:
         raise ValueError("Paperless token file is empty")
-    return PaperlessRestSource(url, token, verify_tls=not arguments.allow_http)
+    return PaperlessRestSource(url, token, verify_tls=not arguments.allow_http)  # gitleaks:allow
 
 
 async def run_paperless(arguments: argparse.Namespace) -> None:

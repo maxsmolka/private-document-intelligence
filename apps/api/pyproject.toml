@@ -1,6 +1,6 @@
 [project]
 name = "pdi-api"
-version = "0.1.0"
+version = "1.0.0"
 description = "Private Document Intelligence API"
 requires-python = ">=3.13"
 dependencies = [
@@ -32,8 +32,8 @@ dev = [
   "httpx>=0.28,<1",
   "mypy>=1.15,<2",
   "pillow>=11,<13",
-  "pytest>=8.3,<9",
-  "pytest-asyncio>=0.25,<1",
+  "pytest>=9.0.3,<10",
+  "pytest-asyncio>=1.2,<2",
   "ruff>=0.9,<1",
 ]
 

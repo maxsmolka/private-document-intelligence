@@ -15,6 +15,7 @@ from pdi.documents.models import Document
 from pdi.ingestion.models import DocumentAsset, DocumentExtraction
 from pdi.operations.models import BackupRecord
 from pdi.storage.base import StorageBackend
+from pdi.version import PDI_VERSION
 
 BACKUP_FORMAT_VERSION = "1"
 
@@ -85,7 +86,7 @@ async def create_backup(
     manifest = {
         "format": "pdi-backup",
         "format_version": BACKUP_FORMAT_VERSION,
-        "pdi_version": "0.1.0-m6",
+        "pdi_version": PDI_VERSION,
         "created_at": datetime.now(UTC).isoformat(),
         "database_format": "postgresql_custom",
         "document_count": int(

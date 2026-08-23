@@ -14,6 +14,15 @@ ENV NEXT_PUBLIC_PDI_API_URL=$NEXT_PUBLIC_PDI_API_URL
 RUN npm run lint && npm run build
 
 FROM node:22-alpine AS runtime
+ARG PDI_VERSION=1.0.0
+ARG PDI_REVISION=unknown
+ARG PDI_SOURCE=https://github.com/maxsmolka/private-document-intelligence
+LABEL org.opencontainers.image.title="PDI web" \
+      org.opencontainers.image.description="Private Document Intelligence web application" \
+      org.opencontainers.image.version=$PDI_VERSION \
+      org.opencontainers.image.revision=$PDI_REVISION \
+      org.opencontainers.image.source=$PDI_SOURCE \
+      org.opencontainers.image.licenses="MIT"
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
 RUN addgroup --system --gid 10001 pdi && adduser --system --uid 10001 --ingroup pdi pdi

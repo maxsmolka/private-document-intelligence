@@ -1,5 +1,7 @@
 # Operations
 
+For upgrades, use the sequence **backup → verify backup → pull explicitly versioned images → run migrations → restart → readiness → search verify**. The API release image runs `alembic upgrade head` before serving traffic. A previous image may not understand a newer schema, so database rollback is not assumed safe; restore the verified pre-upgrade database and storage backup together when an upgrade is not backward compatible. See [RELEASES.md](RELEASES.md).
+
 ## Routine commands
 
 ```bash

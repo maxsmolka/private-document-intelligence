@@ -1,4 +1,7 @@
 .env
+.env.*
+!.env.example
+!.env.release.example
 .venv/
 node_modules/
 .next/
@@ -13,6 +16,15 @@ __pycache__/
 coverage.xml
 htmlcov/
 /storage/
+/backups/
+/exports/
+/reports/
+/consume/
+/consume-processed/
+/consume-failed/
+playwright-report/
+test-results/
+*.trace.zip
 benchmark-corpus/
 benchmark-results.json
 intelligence-results.json
