@@ -2,6 +2,8 @@
 
 Thank you for helping improve PDI. Before opening a change, search existing issues and keep proposals focused. Security reports belong in the private channel described in [SECURITY.md](SECURITY.md).
 
+This repository and its CI output are public. Use only synthetic or fully redacted fixtures, screenshots, logs, and examples. Do not paste production output or private deployment topology into issues, pull requests, commit messages, test snapshots, or Actions logs. When in doubt, leave the material out and ask through a privacy-safe description.
+
 ## Development checks
 
 Use Python 3.13, uv, Node.js 22, npm, and PostgreSQL 17. Follow the setup in the README, then run:
