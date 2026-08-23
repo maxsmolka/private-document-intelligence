@@ -84,6 +84,7 @@ Quality commands and contribution rules are in [CONTRIBUTING.md](CONTRIBUTING.md
 ## Documentation
 
 - [Security policy](SECURITY.md) and [security model](docs/SECURITY.md)
+- [Repository and release security](docs/REPOSITORY_SECURITY.md)
 - [Operations](docs/OPERATIONS.md), [backup/restore](docs/BACKUP_RESTORE.md), and [cutover](docs/CUTOVER.md)
 - [Paperless migration](docs/PAPERLESS_MIGRATION.md) and [open export](docs/EXPORT.md)
 - [Architecture](docs/ARCHITECTURE.md) and [future Atlas boundary](docs/ATLAS_INTEGRATION.md)
