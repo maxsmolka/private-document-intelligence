@@ -38,7 +38,8 @@ def output(value: object) -> None:
 def output_secret_once(value: object) -> None:
     """Deliver a newly minted credential once to the invoking interactive CLI."""
     # This is the explicit credential-delivery channel, not application logging.
-    print(  # lgtm[py/clear-text-logging-sensitive-data]
+    # codeql[py/clear-text-logging-sensitive-data]
+    print(
         json.dumps(value, indent=2, ensure_ascii=False, default=str)
     )
 
