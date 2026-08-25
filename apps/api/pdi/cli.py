@@ -115,7 +115,7 @@ async def run_user(arguments: argparse.Namespace) -> None:
     async with session_factory() as session:
         if arguments.user_command == "create":
             await create_user(session, arguments.username, password_from(arguments))
-            output({"username": arguments.username.casefold(), "created": True})
+            output({"created": True})
         else:
             active_user = await session.scalar(
                 select(LocalUser).where(LocalUser.username == arguments.username.casefold())
