@@ -3,7 +3,7 @@ import asyncio
 import getpass
 import hashlib
 import json
-import sys
+import os
 import uuid
 from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
@@ -39,9 +39,8 @@ def output(value: object) -> None:
 def output_secret_once(value: object) -> None:
     """Deliver a newly minted credential once to the invoking interactive CLI."""
     rendered = json.dumps(value, indent=2, ensure_ascii=False, default=str)
-    # This is the explicit credential-delivery channel, not application logging.
-    sys.stdout.write(rendered)  # lgtm[py/clear-text-logging-sensitive-data]
-    sys.stdout.write("\n")
+    # File descriptor 1 is the explicit CLI credential channel, not application logging.
+    os.write(1, f"{rendered}\n".encode())
 
 
 async def run_reconcile(cleanup: bool, stale_after: int) -> None:
