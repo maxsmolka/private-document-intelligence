@@ -44,4 +44,4 @@ The committed synthetic corpus contains invoices, insurance, tax, contract, bank
 make benchmark-intelligence
 ```
 
-The harness reports classification accuracy and exact-match precision, recall, and F1 for amounts and identifiers, plus per-sample outcomes and duration. On the committed corpus, deterministic provider `1.0.0` scores `1.0` for all four quality metrics. This small synthetic baseline protects regressions; it is not a claim about real-world accuracy. Add redacted or synthetic cases when a production error pattern is discovered.
+The harness reports classification accuracy; exact-match precision, recall, and F1 for amounts and identifiers; semantic-field precision, recall, and F1; per-sample outcomes; and duration. On the 11-case synthetic v1.0.2 corpus, deterministic provider `1.1.0` scores `1.0` for classification, value, and semantic-field metrics. The pension case distinguishes document, valuation, contract-start, and retirement-start dates plus current values from model scenarios. This small synthetic baseline protects regressions; it is not a claim about broad real-world accuracy.

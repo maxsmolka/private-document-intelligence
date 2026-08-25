@@ -16,11 +16,15 @@ class ExtractionError(RuntimeError):
     pass
 
 
-class OcrProviderUnavailable(ExtractionError):
+class OcrProcessingError(ExtractionError):
     pass
 
 
-class OcrTimeoutError(ExtractionError):
+class OcrProviderUnavailable(OcrProcessingError):
+    pass
+
+
+class OcrTimeoutError(OcrProcessingError):
     pass
 
 
@@ -268,7 +272,7 @@ class OcrMyPdfProvider:
                 raise
             raise OcrTimeoutError("OCRmyPDF processing timed out") from exc
         if process.returncode != 0 or not self.output_path.is_file():
-            raise ExtractionError(f"OCRmyPDF failed with exit code {process.returncode}")
+            raise OcrProcessingError(f"OCRmyPDF failed with exit code {process.returncode}")
         native = await NativePdfProvider().extract(self.output_path, mime_type)
         version_result = await asyncio.create_subprocess_exec(
             "ocrmypdf",
@@ -325,15 +329,42 @@ async def extract_document(
             raise OcrProviderUnavailable(f"Configured OCR provider is unavailable: {ocr_provider}")
         if work_dir is None:
             raise ExtractionError("A private OCR working directory is required")
-        return await OcrMyPdfProvider(
-            timeout=ocr_timeout,
-            language=ocr_language,
-            output_path=work_dir / "ocr-output.pdf",
-            max_pages=ocr_max_pages,
-            max_image_mpixels=ocr_max_image_mpixels,
-            force_rotation=ocr_force_rotation,
-            ocr_reason=str(native.metadata["ocr_reason"]),
-        ).extract(path, mime_type)
+        try:
+            return await OcrMyPdfProvider(
+                timeout=ocr_timeout,
+                language=ocr_language,
+                output_path=work_dir / "ocr-output.pdf",
+                max_pages=ocr_max_pages,
+                max_image_mpixels=ocr_max_image_mpixels,
+                force_rotation=ocr_force_rotation,
+                ocr_reason=str(native.metadata["ocr_reason"]),
+            ).extract(path, mime_type)
+        except OcrProcessingError as exc:
+            category = (
+                "timeout"
+                if isinstance(exc, OcrTimeoutError)
+                else "provider_unavailable"
+                if isinstance(exc, OcrProviderUnavailable)
+                else "provider_failed"
+            )
+            return ExtractionResult(
+                text=native.text,
+                page_count=native.page_count,
+                pages=native.pages,
+                method="native_pdf_degraded",
+                provider=native.provider,
+                provider_version=native.provider_version,
+                warnings=[*native.warnings, "ocr_processing_degraded", f"ocr_{category}"],
+                metadata={
+                    **native.metadata,
+                    "degraded": True,
+                    "degraded_stage": "ocr_processing",
+                    "degraded_component": "ocrmypdf",
+                    "degraded_reason": category,
+                    "retryable": category in {"timeout", "provider_unavailable", "provider_failed"},
+                },
+                language=ocr_language,
+            )
     if ocr_enabled:
         tesseract = TesseractImageProvider(
             timeout=ocr_timeout,

@@ -23,9 +23,16 @@ const areas: LifeArea[] = ["finance", "insurance", "vehicle", "home", "health", 
 function label(value: string) { return value.replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase()); }
 
 export function ReviewWorkspace({ detail, queue }: { detail: ReviewDetail; queue: ReviewItem[] }) {
+  return <ReviewWorkspaceDocument key={detail.document.id} detail={detail} queue={queue} />;
+}
+
+function ReviewWorkspaceDocument({ detail, queue }: { detail: ReviewDetail; queue: ReviewItem[] }) {
   const router = useRouter();
   const document = detail.document;
-  const proposed = useMemo(() => Object.fromEntries(detail.proposals.filter((item) => item.status === "pending").map((item) => [item.field_name, item.proposed_value])), [detail.proposals]);
+  const [pendingProposals, setPendingProposals] = useState(() => detail.proposals.filter((item) => item.status === "pending"));
+  const [reviewQueue, setReviewQueue] = useState(queue);
+  const [completed, setCompleted] = useState(false);
+  const proposed = useMemo(() => Object.fromEntries(pendingProposals.map((item) => [item.field_name, item.proposed_value])), [pendingProposals]);
   const [values, setValues] = useState<ConfirmMetadata>({
     title: proposed.title ?? document.title,
     document_date: proposed.document_date ?? document.document_date,
@@ -35,12 +42,12 @@ export function ReviewWorkspace({ detail, queue }: { detail: ReviewDetail; queue
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
   const form = useRef<HTMLFormElement>(null);
-  const currentIndex = queue.findIndex((item) => item.document.id === document.id);
-  const previous = currentIndex > 0 ? queue[currentIndex - 1]?.document.id : undefined;
-  const next = currentIndex >= 0 && currentIndex < queue.length - 1 ? queue[currentIndex + 1]?.document.id : undefined;
+  const currentIndex = reviewQueue.findIndex((item) => item.document.id === document.id);
+  const previous = currentIndex > 0 ? reviewQueue[currentIndex - 1]?.document.id : undefined;
+  const next = currentIndex >= 0 && currentIndex < reviewQueue.length - 1 ? reviewQueue[currentIndex + 1]?.document.id : undefined;
   const afterCompletion = next ?? previous;
   const currentQueueItem = queue[currentIndex];
-  const metadataPending = detail.proposals.filter((item) => item.status === "pending").length;
+  const metadataPending = pendingProposals.length;
   const ocrAsset = detail.assets.find((asset) => asset.kind === "ocr_pdf");
 
   useEffect(() => {
@@ -57,12 +64,19 @@ export function ReviewWorkspace({ detail, queue }: { detail: ReviewDetail; queue
 
   async function confirm(event: FormEvent) {
     event.preventDefault(); setBusy("confirm"); setError("");
-    try { await confirmReview(document.id, values); router.push(afterCompletion ? `/review?id=${afterCompletion}` : "/review"); router.refresh(); }
+    try {
+      await confirmReview(document.id, values);
+      setReviewQueue((current) => current.filter((item) => item.document.id !== document.id));
+      setPendingProposals([]);
+      setCompleted(true);
+      router.push(afterCompletion ? `/review?id=${afterCompletion}` : "/review");
+      router.refresh();
+    }
     catch (reason) { setError(reason instanceof Error ? reason.message : "Could not save review"); setBusy(null); }
   }
   async function reject() {
     setBusy("reject"); setError("");
-    try { await rejectReview(document.id); router.refresh(); setBusy(null); }
+    try { await rejectReview(document.id); setPendingProposals([]); router.refresh(); setBusy(null); }
     catch (reason) { setError(reason instanceof Error ? reason.message : "Could not reject proposals"); setBusy(null); }
   }
   async function decide(proposal: MetadataProposal, action: "accept" | "reject", value?: string) {
@@ -80,6 +94,7 @@ export function ReviewWorkspace({ detail, queue }: { detail: ReviewDetail; queue
           setValues((current) => ({ ...current, [proposal.field_name]: document[proposal.field_name as keyof typeof document] }));
         }
       }
+      setPendingProposals((current) => current.filter((item) => item.id !== proposal.id));
       router.refresh(); setBusy(null);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not update proposal"); setBusy(null); }
   }
@@ -87,7 +102,7 @@ export function ReviewWorkspace({ detail, queue }: { detail: ReviewDetail; queue
   return <div>
     <div className="panel mb-5 grid gap-3 p-4 lg:grid-cols-[1fr_auto]">
       <div>
-        <p className="text-xs font-medium text-stone-700">Document {currentIndex + 1} of {queue.length}</p>
+        <p className="text-xs font-medium text-stone-700">{completed ? `Review completed · ${reviewQueue.length} remaining` : `Document ${currentIndex + 1} of ${reviewQueue.length}`}</p>
         <div className="mt-2 flex flex-wrap gap-2 text-xs">
           <span className="status-pill border-violet-200 bg-violet-50 text-violet-700">Metadata · {metadataPending}</span>
           <span className="status-pill border-blue-200 bg-blue-50 text-blue-700">Knowledge · {currentQueueItem?.knowledge_proposal_count ?? 0}</span>
@@ -100,9 +115,9 @@ export function ReviewWorkspace({ detail, queue }: { detail: ReviewDetail; queue
       </nav>
     </div>
     <details className="mb-5 rounded-xl border border-stone-200 bg-white">
-      <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium text-stone-700"><List className="size-4" />Review queue · {queue.length} documents</summary>
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium text-stone-700"><List className="size-4" />Review queue · {reviewQueue.length} documents</summary>
       <ol className="max-h-64 divide-y divide-stone-100 overflow-auto border-t border-stone-100">
-        {queue.map((item, index) => <li key={item.document.id}><Link href={`/review?id=${item.document.id}`} aria-current={item.document.id === document.id ? "page" : undefined} className={`grid gap-1 px-4 py-3 text-xs hover:bg-stone-50 ${item.document.id === document.id ? "bg-stone-50" : ""}`}><span className="min-w-0 truncate font-medium text-stone-800" title={item.document.title}>{index + 1}. {item.document.title}</span><span className="text-stone-400">Metadata {item.proposal_count} · Knowledge {item.knowledge_proposal_count} · Extraction {item.extraction_review_required ? "pending" : "clear"}</span></Link></li>)}
+        {reviewQueue.map((item, index) => <li key={item.document.id}><Link href={`/review?id=${item.document.id}`} aria-current={item.document.id === document.id ? "page" : undefined} className={`grid gap-1 px-4 py-3 text-xs hover:bg-stone-50 ${item.document.id === document.id ? "bg-stone-50" : ""}`}><span className="min-w-0 truncate font-medium text-stone-800" title={item.document.title}>{index + 1}. {item.document.title}</span><span className="text-stone-400">Metadata {item.proposal_count} · Knowledge {item.knowledge_proposal_count} · Extraction {item.extraction_review_required ? "pending" : "clear"}</span></Link></li>)}
       </ol>
     </details>
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_390px]">
@@ -115,12 +130,12 @@ export function ReviewWorkspace({ detail, queue }: { detail: ReviewDetail; queue
         <Field label="Life area" proposed={proposed.life_area}><select value={values.life_area} onChange={(event) => setValues({ ...values, life_area: event.target.value as LifeArea })} className="field">{areas.map((area) => <option key={area} value={area}>{label(area)}</option>)}</select></Field>
         <Field label="Document type" proposed={proposed.document_type}><input maxLength={100} placeholder="e.g. Invoice" value={values.document_type ?? ""} onChange={(event) => setValues({ ...values, document_type: event.target.value || null })} className="field" /></Field>
       </div>
-      {detail.proposals.some((item) => item.status === "pending" && item.intelligence_run_id) ? <div className="space-y-3"><div className="flex items-center justify-between"><h3 className="text-sm font-semibold text-stone-800">Evidence-backed proposals</h3>{detail.current_intelligence_run ? <span className="text-[11px] text-stone-400">{detail.current_intelligence_run.provider} · schema {detail.current_intelligence_run.schema_version}</span> : null}</div>{detail.proposals.filter((item) => item.status === "pending" && item.intelligence_run_id).map((proposal) => <ProposalCard key={proposal.id} documentId={document.id} proposal={proposal} busy={busy === proposal.id} decide={decide} />)}</div> : null}
+      {pendingProposals.some((item) => item.intelligence_run_id) ? <div className="space-y-3"><div className="flex items-center justify-between"><h3 className="text-sm font-semibold text-stone-800">Evidence-backed proposals</h3>{detail.current_intelligence_run ? <span className="text-[11px] text-stone-400">{detail.current_intelligence_run.provider} · schema {detail.current_intelligence_run.schema_version}</span> : null}</div>{pendingProposals.filter((item) => item.intelligence_run_id).map((proposal) => <ProposalCard key={proposal.id} documentId={document.id} proposal={proposal} busy={busy === proposal.id} decide={decide} />)}</div> : null}
       {detail.extraction ? <div className="rounded-2xl border border-stone-200 bg-white p-4"><div className="flex items-center justify-between"><span className="flex items-center gap-2 text-xs font-medium text-stone-500"><FileText className="size-3.5" />Extracted text</span><span className="text-[11px] text-stone-400">{detail.extraction.provider} · {detail.extraction.page_count} {detail.extraction.page_count === 1 ? "page" : "pages"}</span></div>{ocrAsset ? <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg bg-stone-50 p-3 text-[11px] text-stone-500"><span>OCR</span><span className="text-right text-stone-700">Completed</span><span>Provider</span><span className="text-right text-stone-700">{ocrAsset.provider}</span></div> : null}<p className="mt-3 max-h-28 overflow-hidden whitespace-pre-wrap text-xs leading-5 text-stone-500">{detail.extraction.text || "No embedded text was found. This document is an OCR candidate."}</p></div> : null}
       {error ? <p role="alert" className="text-sm text-red-600">{error}</p> : null}
       <div className="rounded-xl border border-stone-200 bg-stone-50 p-4"><p className="text-xs leading-5 text-stone-600">Document completion saves the metadata above, resolves any still-pending metadata proposals against those values, marks the document ready, and removes it from this document queue. Knowledge and extraction decisions remain separate.</p><Button type="submit" className="mt-3" disabled={busy !== null}><Check className="size-4" />{busy === "confirm" ? "Saving…" : "Mark document reviewed"}</Button></div>
       <RetryProcessingButton documentId={document.id} />
-      {detail.proposals.some((item) => item.status === "pending") ? <button type="button" onClick={reject} disabled={busy !== null} className="text-xs text-stone-400 underline-offset-4 hover:text-stone-700 hover:underline">Reject all pending metadata proposals</button> : null}
+      {pendingProposals.length ? <button type="button" onClick={reject} disabled={busy !== null} className="text-xs text-stone-400 underline-offset-4 hover:text-stone-700 hover:underline">Reject all pending metadata proposals</button> : null}
     </form>
     </div>
   </div>;

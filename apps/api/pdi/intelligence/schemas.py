@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-SCHEMA_VERSION = "1"
+SCHEMA_VERSION = "2"
 DOCUMENT_TYPES = {
     "invoice",
     "receipt",
@@ -19,6 +19,7 @@ DOCUMENT_TYPES = {
     "employment_document",
     "travel_document",
     "generic_letter",
+    "pension_statement",
 }
 LIFE_AREAS = {
     "finance",
@@ -62,8 +63,15 @@ class IntelligenceCandidate(BaseModel):
         "due_date",
         "effective_date",
         "other_date",
+        "valuation_date",
+        "contract_start",
+        "planned_retirement_start",
         "amount",
+        "monthly_contribution",
+        "retirement_assets",
+        "cancellation_value",
         "identifier",
+        "product_name",
     ]
     value: str = Field(min_length=1, max_length=500)
     normalized_value: str = Field(min_length=1, max_length=500)
@@ -77,7 +85,7 @@ class IntelligenceCandidate(BaseModel):
 class IntelligenceResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["1"] = "1"
+    schema_version: Literal["2"] = "2"
     document_type: IntelligenceCandidate | None = None
     life_area: IntelligenceCandidate | None = None
     title: IntelligenceCandidate | None = None
@@ -85,10 +93,18 @@ class IntelligenceResult(BaseModel):
     dates: list[IntelligenceCandidate] = Field(default_factory=list)
     amounts: list[IntelligenceCandidate] = Field(default_factory=list)
     identifiers: list[IntelligenceCandidate] = Field(default_factory=list)
+    semantic_facts: list[IntelligenceCandidate] = Field(default_factory=list)
 
     def candidates(self) -> list[IntelligenceCandidate]:
         singular = [item for item in (self.document_type, self.life_area, self.title) if item]
-        return [*singular, *self.organizations, *self.dates, *self.amounts, *self.identifiers]
+        return [
+            *singular,
+            *self.organizations,
+            *self.dates,
+            *self.amounts,
+            *self.identifiers,
+            *self.semantic_facts,
+        ]
 
     @model_validator(mode="after")
     def validate_taxonomy_and_sections(self) -> "IntelligenceResult":
@@ -106,9 +122,24 @@ class IntelligenceResult(BaseModel):
                 raise ValueError("Candidate is in the wrong result section")
         for candidates, fields in (
             (self.organizations, {"organization"}),
-            (self.dates, {"document_date", "due_date", "effective_date", "other_date"}),
-            (self.amounts, {"amount"}),
+            (
+                self.dates,
+                {
+                    "document_date",
+                    "due_date",
+                    "effective_date",
+                    "other_date",
+                    "valuation_date",
+                    "contract_start",
+                    "planned_retirement_start",
+                },
+            ),
+            (
+                self.amounts,
+                {"amount", "monthly_contribution", "retirement_assets", "cancellation_value"},
+            ),
             (self.identifiers, {"identifier"}),
+            (self.semantic_facts, {"product_name"}),
         ):
             if any(candidate.field_name not in fields for candidate in candidates):
                 raise ValueError("Candidate is in the wrong result section")
