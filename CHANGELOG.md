@@ -20,7 +20,7 @@ All notable changes are documented here. PDI follows Semantic Versioning.
 
 ### Security
 
-- Keep password-handling data out of CLI output dataflow; user creation reports only a constant success flag.
+- Keep password-handling data out of CLI output dataflow and isolate intentional one-time API-token delivery from ordinary CLI output.
 
 ## [1.0.1] - 2026-08-23
 

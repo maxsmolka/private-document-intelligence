@@ -35,6 +35,14 @@ def output(value: object) -> None:
     print(json.dumps(value, indent=2, ensure_ascii=False, default=str))
 
 
+def output_secret_once(value: object) -> None:
+    """Deliver a newly minted credential once to the invoking interactive CLI."""
+    # This is the explicit credential-delivery channel, not application logging.
+    print(  # lgtm[py/clear-text-logging-sensitive-data]
+        json.dumps(value, indent=2, ensure_ascii=False, default=str)
+    )
+
+
 async def run_reconcile(cleanup: bool, stale_after: int) -> None:
     async with session_factory() as session:
         report = await reconcile_storage(
@@ -142,7 +150,7 @@ async def run_token(arguments: argparse.Namespace) -> None:
                 scopes=arguments.scope,
                 expires_at=expires,
             )
-            output(
+            output_secret_once(
                 {
                     "id": str(token.id),
                     "name": token.name,
