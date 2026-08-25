@@ -19,6 +19,7 @@ async def run(corpus_path: Path) -> dict[str, Any]:
     classification_correct = 0
     classification_total = 0
     true_positive = false_positive = false_negative = 0
+    semantic_true_positive = semantic_false_positive = semantic_false_negative = 0
     rows: list[dict[str, Any]] = []
     started = time.perf_counter()
     for sample in corpus:
@@ -40,6 +41,19 @@ async def run(corpus_path: Path) -> dict[str, Any]:
         true_positive += tp
         false_positive += fp
         false_negative += fn
+        expected_semantics = set(expected.get("typed_fields", []))
+        actual_semantics = (
+            {
+                f"{item.field_name}={item.normalized_value}"
+                for item in [*result.dates, *result.amounts, *result.semantic_facts]
+            }
+            if "typed_fields" in expected
+            else set()
+        )
+        semantic_tp, semantic_fp, semantic_fn = score_sets(expected_semantics, actual_semantics)
+        semantic_true_positive += semantic_tp
+        semantic_false_positive += semantic_fp
+        semantic_false_negative += semantic_fn
         rows.append(
             {
                 "id": sample["id"],
@@ -48,6 +62,9 @@ async def run(corpus_path: Path) -> dict[str, Any]:
                 "tp": tp,
                 "fp": fp,
                 "fn": fn,
+                "semantic_tp": semantic_tp,
+                "semantic_fp": semantic_fp,
+                "semantic_fn": semantic_fn,
             }
         )
     precision = (
@@ -55,6 +72,16 @@ async def run(corpus_path: Path) -> dict[str, Any]:
     )
     recall = (
         true_positive / (true_positive + false_negative) if true_positive + false_negative else 1.0
+    )
+    semantic_precision = (
+        semantic_true_positive / (semantic_true_positive + semantic_false_positive)
+        if semantic_true_positive + semantic_false_positive
+        else 1.0
+    )
+    semantic_recall = (
+        semantic_true_positive / (semantic_true_positive + semantic_false_negative)
+        if semantic_true_positive + semantic_false_negative
+        else 1.0
     )
     return {
         "provider": provider.name,
@@ -65,6 +92,13 @@ async def run(corpus_path: Path) -> dict[str, Any]:
         "field_precision": precision,
         "field_recall": recall,
         "field_f1": 2 * precision * recall / (precision + recall) if precision + recall else 0.0,
+        "semantic_precision": semantic_precision,
+        "semantic_recall": semantic_recall,
+        "semantic_f1": (
+            2 * semantic_precision * semantic_recall / (semantic_precision + semantic_recall)
+            if semantic_precision + semantic_recall
+            else 0.0
+        ),
         "results": rows,
     }
 

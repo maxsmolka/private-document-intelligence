@@ -2,7 +2,7 @@
 
 ## Method
 
-`pdi-benchmark-knowledge` evaluates the deterministic Milestone 5 stage against `apps/api/tests/fixtures/knowledge_corpus.json`. The ten synthetic German cases cover insurance policies and amendments, utilities, subscriptions and invoices, banking, official deadlines, exact aliases, similar-but-distinct organizations, and an ambiguous relative deadline.
+`pdi-benchmark-knowledge` evaluates the deterministic Milestone 5 stage against `apps/api/tests/fixtures/knowledge_corpus.json`. The ten synthetic German cases cover insurance policies and amendments, utilities, subscriptions and invoices, banking, official deadlines, exact aliases, similar-but-distinct organizations, and an ambiguous relative deadline. Explicit invoice deadlines include both a typed payment-due event and deadline while invoice-only evidence remains excluded from contract linking.
 
 The corpus supplies verified Milestone 3 organization/identifier candidates; this benchmark measures the downstream M5 resolution, linking, temporal, deadline, action, and relationship logic rather than claiming end-to-end OCR accuracy. Set comparisons report precision, recall, F1, type/date accuracy, resolution accuracy, duplicate precision/recall, false merges, and individual failures. The corpus is small and purpose-built, so perfect scores are a regression baseline, not evidence of broad real-world generalization.
 

@@ -2,6 +2,7 @@ import asyncio
 import uuid
 from datetime import UTC, datetime
 
+import pytest
 from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -538,6 +539,99 @@ async def test_relative_deadline_keeps_rule_without_invented_date(
         assert relative.payload["due_at"] is None
         assert "ambiguous_relative_deadline" in relative.validation_notes
         assert not any(item.proposal_type == KnowledgeProposalType.ACTION_ITEM for item in created)
+
+
+@pytest.mark.parametrize(
+    ("wording", "expected"),
+    [
+        ("zahlbar bis zum 27.08.2026", "2026-08-27"),
+        ("begleichen Sie den Rechnungsbetrag bis zum 28.08.2026", "2026-08-28"),
+        ("fällig am 29.08.2026", "2026-08-29"),
+    ],
+)
+async def test_invoice_deadline_does_not_create_contract_from_identifier_alone(
+    session_factory: async_sessionmaker[AsyncSession], wording: str, expected: str
+) -> None:
+    async with session_factory() as session:
+        document, extraction, run = await seed_run(session, f"invoice-{expected}")
+        document.document_type = "invoice"
+        document.life_area = LifeArea.FINANCE
+        extraction.text = f"Rechnung\nRechnungsnummer: R-2026-10\n{wording}\nBetrag: 49,90 EUR"
+        extraction.pages = [extraction.text]
+        extraction.content_hash = expected.replace("-", "").ljust(64, "e")
+        created = await generate_knowledge_proposals(
+            session, document=document, extraction=extraction, run=run
+        )
+        assert not any(item.proposal_type == KnowledgeProposalType.CONTRACT for item in created)
+        deadline = next(
+            item for item in created if item.proposal_type == KnowledgeProposalType.DEADLINE
+        )
+        assert deadline.payload["due_at"] == expected
+        payment_due = next(
+            item
+            for item in created
+            if item.proposal_type == KnowledgeProposalType.EVENT
+            and item.payload["event_type"] == EventType.PAYMENT_DUE.value
+        )
+        assert payment_due.payload["event_date"] == expected
+
+
+async def test_invoice_without_deadline_creates_neither_deadline_nor_contract(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with session_factory() as session:
+        document, extraction, run = await seed_run(session, "invoice-no-due")
+        document.document_type = "invoice"
+        document.life_area = LifeArea.FINANCE
+        extraction.text = "Rechnung\nRechnungsnummer: R-2026-11\nBetrag: 49,90 EUR"
+        extraction.pages = [extraction.text]
+        created = await generate_knowledge_proposals(
+            session, document=document, extraction=extraction, run=run
+        )
+        assert not any(
+            item.proposal_type in {KnowledgeProposalType.CONTRACT, KnowledgeProposalType.DEADLINE}
+            for item in created
+        )
+
+
+@pytest.mark.parametrize("proposal_type", list(KnowledgeProposalType))
+async def test_every_pending_knowledge_proposal_can_be_rejected_without_verified_evidence(
+    client: AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+    proposal_type: KnowledgeProposalType,
+) -> None:
+    async with session_factory() as session:
+        document, extraction, run = await seed_run(session, f"reject-{proposal_type.value}")
+        proposal = KnowledgeProposal(
+            identity_key=f"reject-{proposal_type.value}".ljust(64, "0")[:64],
+            proposal_type=proposal_type,
+            document_id=document.id,
+            extraction_id=extraction.id,
+            intelligence_run_id=run.id,
+            knowledge_schema_version="1",
+            provider="deterministic",
+            provider_version="1",
+            payload={"title": "Synthetic candidate"},
+            confidence=0.4,
+            evidence=[],
+            evidence_verified=False,
+            status=ProposalStatus.PENDING,
+        )
+        session.add(proposal)
+        await session.commit()
+        proposal_id = proposal.id
+    response = await client.post(f"/api/v1/knowledge/review/{proposal_id}/reject")
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == ProposalStatus.REJECTED
+    async with session_factory() as session:
+        stored = await session.get(KnowledgeProposal, proposal_id)
+        assert stored is not None and stored.status == ProposalStatus.REJECTED
+        history = await session.scalar(
+            select(KnowledgeHistory).where(KnowledgeHistory.source_proposal_id == proposal_id)
+        )
+        assert history is not None and history.action == "rejected"
+        assert await session.scalar(select(func.count()).select_from(Contract)) == 0
+        assert await session.scalar(select(func.count()).select_from(Organization)) == 0
 
 
 async def test_new_analysis_supersedes_only_stale_pending_proposals(

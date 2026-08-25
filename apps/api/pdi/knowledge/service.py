@@ -525,7 +525,11 @@ async def accept_knowledge_proposal(
 async def reject_knowledge_proposal(
     session: AsyncSession, proposal_id: uuid.UUID
 ) -> KnowledgeProposal:
-    proposal = await proposal_for_review(session, proposal_id)
+    proposal = await session.get(KnowledgeProposal, proposal_id)
+    if proposal is None:
+        raise HTTPException(status_code=404, detail="Knowledge proposal not found")
+    if proposal.status != ProposalStatus.PENDING:
+        raise HTTPException(status_code=409, detail="Knowledge proposal is not pending")
     proposal.status = ProposalStatus.REJECTED
     proposal.resolved_at = datetime.now(UTC)
     audit(

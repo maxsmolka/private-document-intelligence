@@ -56,7 +56,11 @@ EVENT_PATTERNS: tuple[tuple[re.Pattern[str], EventType, str], ...] = (
 )
 DEADLINE_PATTERNS: tuple[tuple[re.Pattern[str], str, str], ...] = (
     (
-        re.compile(rf"(?:zahlbar|fällig)\s+(?:bis|zum)\s+{DATE_PATTERN}", re.I),
+        re.compile(
+            rf"(?:zahlbar\s+(?:bis(?:\s+zum)?|zum)|fällig\s+(?:am|zum)|"
+            rf"begleichen\s+Sie\s+den\s+Rechnungsbetrag\s+bis(?:\s+zum)?)\s+{DATE_PATTERN}",
+            re.I,
+        ),
         "payment",
         "Payment due",
     ),
@@ -187,35 +191,61 @@ def contract_candidate(
 ) -> Candidate | None:
     proposals = metadata_candidates(run)
     identifiers = [item for item in proposals if item.field_name == "identifier"]
-    contract_document = (document.document_type or "") in {
-        "contract",
-        "insurance_policy",
-        "employment_document",
-    } or bool(
+    proposed_document_type = next(
+        (
+            item.normalized_value or item.proposed_value
+            for item in proposals
+            if item.field_name == "document_type"
+        ),
+        None,
+    )
+    document_type = document.document_type or proposed_document_type or ""
+    explicit_contract_evidence = bool(
         re.search(
-            r"Vertrag|Versicherungsschein|Police",
+            r"\b(?:Mietvertrag|Mietverhältnis|Versicherungsvertrag|Versicherungsbeginn|"
+            r"Vertragsbeginn|Versicherungsschein|Police|Altersvorsorgevertrag)\b",
             extraction.text,
             re.I,
         )
     )
-    if not identifiers and not contract_document:
+    contract_document = (
+        document_type
+        in {
+            "contract",
+            "insurance_policy",
+            "employment_document",
+            "pension_statement",
+        }
+        or explicit_contract_evidence
+        or (bool(identifiers) and document_type != "invoice")
+    )
+    if not contract_document:
         return None
     identifier = identifiers[0] if identifiers else None
+    product = next((item for item in proposals if item.field_name == "product_name"), None)
+    contract_start = next((item for item in proposals if item.field_name == "contract_start"), None)
     evidence = (
         identifier.evidence
         if identifier
         else next((item.evidence for item in proposals if item.field_name == "document_type"), [])
     )
     payload = {
-        "title": document.title,
-        "contract_type": inferred_contract_type(document).value,
+        "title": product.normalized_value if product else document.title,
+        "contract_type": (
+            ContractType.INSURANCE.value
+            if document_type in {"insurance_policy", "insurance_notice", "pension_statement"}
+            else inferred_contract_type(document).value
+        ),
         "status": "unknown",
+        "start_date": contract_start.normalized_value if contract_start else None,
         "reference_identifier": (
             identifier.normalized_value or identifier.proposed_value if identifier else None
         ),
         "document_relationship_type": (
             ContractDocumentType.POLICY.value
-            if document.document_type == "insurance_policy"
+            if document_type == "insurance_policy"
+            else ContractDocumentType.STATEMENT.value
+            if document_type == "pension_statement"
             else ContractDocumentType.CONTRACT_DOCUMENT.value
         ),
     }
@@ -265,6 +295,22 @@ def temporal_candidates(document: Document, extraction: DocumentExtraction) -> l
                     notes=["explicit_absolute_deadline"],
                 )
             )
+            if deadline_type == "payment":
+                candidates.append(
+                    Candidate(
+                        proposal_type=KnowledgeProposalType.EVENT,
+                        payload={
+                            "event_type": EventType.PAYMENT_DUE.value,
+                            "title": "Payment due",
+                            "event_date": due.isoformat(),
+                            "event_date_precision": "exact",
+                            "life_area": document.life_area.value,
+                        },
+                        confidence=0.95,
+                        evidence=evidence,
+                        notes=["explicit_payment_due_date"],
+                    )
+                )
             action_title = {
                 "payment": "Pay document amount",
                 "cancellation": "Review cancellation deadline",

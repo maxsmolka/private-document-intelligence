@@ -2,6 +2,26 @@
 
 All notable changes are documented here. PDI follows Semantic Versioning.
 
+## [1.0.2] - 2026-08-25
+
+### Fixed
+
+- Keep parseable PDFs reviewable with explicit degradation provenance when OCR processing fails.
+- Make rejection consistent and auditable for every knowledge proposal type without mutating canonical knowledge.
+- Synchronize document and knowledge review queues immediately after successful decisions.
+- Recognize explicit German invoice payment deadlines without treating invoice identifiers as contract evidence.
+- Type annual pension statement dates, current values, product names, and contract evidence while suppressing projected scenario values.
+- Keep pre-flush extraction text available to the PostgreSQL search projection.
+
+### Quality
+
+- Add generated, non-sensitive invoice, pension, proposal-lifecycle, frontend-state, and ten-page scanned-rental regressions.
+- Extend intelligence and knowledge benchmarks with semantic field and payment-due coverage.
+
+### Security
+
+- Keep password-tainted user records out of CLI output dataflow; user creation reports only the normalized non-secret username.
+
 ## [1.0.1] - 2026-08-23
 
 ### Security
@@ -28,5 +48,6 @@ All notable changes are documented here. PDI follows Semantic Versioning.
 
 - Local Argon2id accounts, revocable sessions and API tokens, CSRF protection, upload validation, bounded OCR, non-root containers, and privacy-safe logging.
 
+[1.0.2]: https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.0.2
 [1.0.1]: https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.0.1
 [1.0.0]: https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.0.0

@@ -25,6 +25,21 @@ Fällig bis zum 01.09.2026
 Gesamtbetrag: 1.234,56 EUR
 """
 
+PENSION_STATEMENT = """Muster Leben Versicherung AG
+Jährliche Wertmitteilung RiesterRente STRATEGIE PLUS
+Ausstellungsdatum: 28.02.2022
+Wertmitteilung zum 31.12.2021
+Vertragsnummer: RR-123456
+Versicherungsbeginn: 01.12.2020
+Geplanter Rentenbeginn: 01.05.2055
+Monatlicher Beitrag: 160,42 EUR
+Aktuelles Altersvorsorgevermögen: 8.789,80 EUR
+Rückkaufswert: 8.689,80 EUR
+Modellrechnung bei 1 %: 12.000,00 EUR
+Modellrechnung bei 4 %: 24.000,00 EUR
+Modellrechnung bei 6 %: 36.000,00 EUR
+"""
+
 
 async def test_deterministic_provider_returns_normalized_grounded_candidates() -> None:
     result = await DeterministicIntelligenceProvider().analyze(
@@ -45,6 +60,75 @@ async def test_deterministic_provider_returns_normalized_grounded_candidates() -
     for candidate in result.candidates():
         for evidence in candidate.evidence:
             assert SAMPLE[evidence.start : evidence.end] == evidence.text
+
+
+@pytest.mark.parametrize(
+    ("wording", "expected"),
+    [
+        ("zahlbar bis zum 27.08.2026", "2026-08-27"),
+        ("begleichen Sie den Rechnungsbetrag bis zum 28.08.2026", "2026-08-28"),
+        ("fällig am 29.08.2026", "2026-08-29"),
+    ],
+)
+async def test_invoice_due_date_uses_explicit_german_payment_anchor(
+    wording: str, expected: str
+) -> None:
+    text = f"Rechnung\nRechnungsdatum: 20.08.2026\n{wording}\nBetrag: 49,90 EUR"
+    result = await DeterministicIntelligenceProvider().analyze(
+        DocumentContext(
+            text=text,
+            pages=[text],
+            original_filename="invoice.pdf",
+            extraction_method="native_pdf",
+        )
+    )
+    due_dates = [item.normalized_value for item in result.dates if item.field_name == "due_date"]
+    assert due_dates == [expected]
+
+
+async def test_invoice_without_due_date_does_not_fabricate_one() -> None:
+    text = "Rechnung\nRechnungsdatum: 20.08.2026\nBetrag: 49,90 EUR"
+    result = await DeterministicIntelligenceProvider().analyze(
+        DocumentContext(
+            text=text,
+            pages=[text],
+            original_filename="invoice.pdf",
+            extraction_method="native_pdf",
+        )
+    )
+    assert not any(item.field_name == "due_date" for item in result.dates)
+
+
+async def test_pension_statement_emits_typed_facts_and_suppresses_scenarios() -> None:
+    result = await DeterministicIntelligenceProvider().analyze(
+        DocumentContext(
+            text=PENSION_STATEMENT,
+            pages=[PENSION_STATEMENT],
+            original_filename="annual-statement.pdf",
+            extraction_method="ocr_pdf",
+        )
+    )
+    assert result.document_type is not None
+    assert result.document_type.normalized_value == "pension_statement"
+    assert result.life_area is not None and result.life_area.normalized_value == "insurance"
+    typed_dates = {item.field_name: item.normalized_value for item in result.dates}
+    assert typed_dates == {
+        "document_date": "2022-02-28",
+        "valuation_date": "2021-12-31",
+        "contract_start": "2020-12-01",
+        "planned_retirement_start": "2055-05-01",
+    }
+    typed_amounts = {item.field_name: item.normalized_value for item in result.amounts}
+    assert typed_amounts == {
+        "monthly_contribution": "160.42 EUR",
+        "retirement_assets": "8789.80 EUR",
+        "cancellation_value": "8689.80 EUR",
+    }
+    assert result.semantic_facts[0].field_name == "product_name"
+    assert result.semantic_facts[0].normalized_value == "RiesterRente STRATEGIE PLUS"
+    assert all(
+        "Modellrechnung" not in span.text for item in result.amounts for span in item.evidence
+    )
 
 
 async def seed_document(session: AsyncSession) -> tuple[Document, DocumentExtraction]:

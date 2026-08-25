@@ -289,7 +289,7 @@ async def process_job(
         session,
         job,
         IngestionJobState.COMPLETED,
-        stage="completed",
+        stage="completed_degraded" if result.metadata.get("degraded") else "completed",
         worker_id=worker_id,
     )
     await session.commit()

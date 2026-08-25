@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from pdi.core.config import Settings
 from pdi.documents.models import Document, DocumentStatus, LifeArea
-from pdi.ingestion.extraction import ExtractionResult
+from pdi.ingestion.extraction import ExtractionResult, OcrTimeoutError
 from pdi.ingestion.models import (
     DocumentAsset,
     DocumentAssetKind,
@@ -18,7 +18,7 @@ from pdi.ingestion.queue import claim_job, enqueue_document
 from pdi.ingestion.worker import process_job
 from pdi.search.models import SearchDocument
 from pdi.storage.local import LocalStorageBackend
-from tests.helpers import text_pdf
+from tests.helpers import synthetic_scanned_rental_pdf, text_pdf
 
 
 async def test_worker_processes_pdf_idempotently(
@@ -168,4 +168,69 @@ async def test_worker_persists_ocr_asset_and_retry_is_idempotent(
         assert assets[0].storage_key != first_key
         assert not storage.path_for(first_key).exists()
         assert storage.path_for(assets[0].storage_key).is_file()
+        assert original.read_bytes() == original_bytes
+
+
+async def test_worker_keeps_parseable_scanned_pdf_reviewable_when_ocr_times_out(
+    session_factory: async_sessionmaker[AsyncSession],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    storage = LocalStorageBackend(tmp_path / "degraded-storage")
+    original = storage.path_for("synthetic-rental-scan.pdf")
+    original_bytes = synthetic_scanned_rental_pdf()
+    original.write_bytes(original_bytes)
+    settings = Settings(
+        env="test",
+        database_url=f"sqlite+aiosqlite:///{tmp_path / 'test.db'}",
+        storage_path=storage.root,
+        ocr_enabled=True,
+    )
+    from pdi.ingestion import extraction, worker
+
+    monkeypatch.setattr(worker, "get_storage", lambda: storage)
+
+    async def timed_out(*args: object, **kwargs: object) -> ExtractionResult:
+        raise OcrTimeoutError("synthetic OCR timeout")
+
+    monkeypatch.setattr(extraction.OcrMyPdfProvider, "extract", timed_out)
+    async with session_factory() as session:
+        document = Document(
+            title="synthetic rental contract",
+            original_filename="synthetic-rental-scan.pdf",
+            mime_type="application/pdf",
+            file_size=original.stat().st_size,
+            sha256="9" * 64,
+            storage_key="synthetic-rental-scan.pdf",
+            status=DocumentStatus.INBOX,
+            life_area=LifeArea.HOME,
+            source="test",
+        )
+        document.assets.append(
+            DocumentAsset(
+                kind=DocumentAssetKind.ORIGINAL,
+                storage_key=document.storage_key,
+                mime_type=document.mime_type,
+                file_size=document.file_size,
+                sha256=document.sha256,
+                provider="test",
+                provider_version="1",
+            )
+        )
+        session.add(document)
+        await enqueue_document(session, document, 3)
+        await session.commit()
+        job = await claim_job(session, "degraded-worker")
+        assert job is not None
+        await process_job(session, job, "degraded-worker", settings)
+        assert job.state == IngestionJobState.COMPLETED
+        assert job.stage == "completed_degraded"
+        assert document.status == DocumentStatus.NEEDS_REVIEW
+        stored = await session.scalar(select(DocumentExtraction))
+        assert stored is not None
+        assert stored.page_count == 10
+        assert stored.text == ""
+        assert "ocr_processing_degraded" in stored.warnings
+        assert stored.extraction_metadata["degraded"] is True
+        assert stored.extraction_metadata["degraded_stage"] == "ocr_processing"
         assert original.read_bytes() == original_bytes

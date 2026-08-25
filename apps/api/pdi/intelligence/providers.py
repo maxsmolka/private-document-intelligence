@@ -87,6 +87,11 @@ IDENTIFIER_PATTERN = re.compile(
 )
 
 TYPE_RULES: tuple[tuple[str, str, float], ...] = (
+    (
+        "pension_statement",
+        r"\b(?:Wertmitteilung|Standmitteilung|Jahresmitteilung)\b.*\b(?:Riester\w*|Rente|Altersvorsorge)\b",
+        0.99,
+    ),
     ("insurance_policy", r"\bVersicherungsschein\b|\bPolice\b", 0.96),
     ("invoice", r"\bRechnung\b|\bRechnungsnummer\b", 0.94),
     ("receipt", r"\bKassenbon\b|\bQuittung\b", 0.92),
@@ -116,7 +121,12 @@ LIFE_AREAS = {
     "contract": "personal",
     "official_letter": "personal",
     "generic_letter": "other",
+    "pension_statement": "insurance",
 }
+
+PRODUCT_PATTERN = re.compile(
+    r"(?im)\b(?P<product>RiesterRente\s+[A-ZÄÖÜ0-9][A-ZÄÖÜ0-9 +&-]{2,80})\s*$"
+)
 
 
 def confidence(
@@ -143,7 +153,7 @@ def normalized_amount(value: str) -> Decimal:
 
 class DeterministicIntelligenceProvider:
     name = "deterministic"
-    provider_version = "1.0.0"
+    provider_version = "1.1.0"
     schema_version = SCHEMA_VERSION
     prompt_version = None
 
@@ -155,6 +165,7 @@ class DeterministicIntelligenceProvider:
         amounts = self._amounts(document)
         organizations = self._organizations(document)
         identifiers = self._identifiers(document)
+        semantic_facts = self._semantic_facts(document)
         document_type = self._document_type(document)
         life_area = self._life_area(document_type)
         title = self._title(document, document_type, organizations, dates)
@@ -166,6 +177,7 @@ class DeterministicIntelligenceProvider:
             dates=dates,
             amounts=amounts,
             identifiers=identifiers,
+            semantic_facts=semantic_facts,
         )
 
     def _dates(self, document: DocumentContext) -> list[IntelligenceCandidate]:
@@ -182,11 +194,24 @@ class DeterministicIntelligenceProvider:
                 line_end = len(document.text)
             context = document.text[line_start:line_end]
             lowered = context.lower()
-            if re.search(r"fällig|zahlbar|bis zum", lowered):
+            if re.search(
+                r"wertmitteilung\s+zum|bewertungsstichtag|stand\s+zum|"
+                r"(?:altersvorsorgevermögen|kündigungswert|rückkaufswert).*\bzum\b",
+                lowered,
+            ):
+                field, base = "valuation_date", 0.97
+            elif re.search(r"(?:geplanter\s+)?rentenbeginn|renteneintritt", lowered):
+                field, base = "planned_retirement_start", 0.97
+            elif re.search(r"versicherungsbeginn|vertragsbeginn|mietverhältnis\s+beginnt", lowered):
+                field, base = "contract_start", 0.97
+            elif re.search(r"fällig|zahlbar|rechnungsbetrag\s+bis", lowered):
                 field, base = "due_date", 0.94
             elif re.search(r"beginn|gültig|wirksam|\bab\b", lowered):
                 field, base = "effective_date", 0.92
-            elif re.search(r"rechnungsdatum|bescheiddatum|datum|berlin,", lowered):
+            elif re.search(
+                r"rechnungsdatum|bescheiddatum|ausstellungsdatum|dokumentdatum|\bdatum\b|\b\w+,\s+den\b",
+                lowered,
+            ):
                 field, base = "document_date", 0.93
             else:
                 field, base = "other_date", 0.68
@@ -219,19 +244,55 @@ class DeterministicIntelligenceProvider:
         output: list[IntelligenceCandidate] = []
         for match in matches:
             amount = normalized_amount(match.group(0))
+            line_start = document.text.rfind("\n", 0, match.start()) + 1
+            line_end = document.text.find("\n", match.end())
+            if line_end == -1:
+                line_end = len(document.text)
+            line_context = document.text[line_start:line_end]
+            if re.search(
+                r"(?i)modellrechnung|beispiel|angenommen|prognose|wertentwicklung|\d+(?:[,.]\d+)?\s*%",
+                line_context,
+            ):
+                continue
             context = document.text[
                 max(0, match.start() - 60) : min(len(document.text), match.end() + 40)
             ]
-            strong = bool(re.search(r"(?i)gesamt|betrag|summe|beitrag|nachzahlung", context))
-            score, notes = confidence(
-                0.95 if strong else 0.72,
+            if re.search(r"(?i)monatlicher\s+beitrag|monatsbeitrag", line_context):
+                field, base, semantic_notes = (
+                    "monthly_contribution",
+                    0.97,
+                    ["explicit_financial_label"],
+                )
+            elif re.search(
+                r"(?i)(?:aktuelles\s+)?(?:altersvorsorge|renten)vermögen|vertragsguthaben",
+                line_context,
+            ):
+                field, base, semantic_notes = (
+                    "retirement_assets",
+                    0.97,
+                    ["explicit_current_value"],
+                )
+            elif re.search(r"(?i)rückkaufswert|kündigungswert", line_context):
+                field, base, semantic_notes = (
+                    "cancellation_value",
+                    0.97,
+                    ["explicit_current_value"],
+                )
+            else:
+                field = "amount"
+                strong = bool(re.search(r"(?i)gesamt|betrag|summe|beitrag|nachzahlung", context))
+                base = 0.95 if strong else 0.72
+                semantic_notes = []
+            score, confidence_notes = confidence(
+                base,
                 ocr_sensitive=document.ocr_sensitive,
                 ambiguous=len(matches) > 1,
                 critical=True,
             )
+            notes = [*semantic_notes, *confidence_notes]
             output.append(
                 IntelligenceCandidate(
-                    field_name="amount",
+                    field_name=field,
                     value=match.group(0).strip(),
                     normalized_value=f"{amount:.2f} EUR",
                     structured_value={
@@ -246,6 +307,23 @@ class DeterministicIntelligenceProvider:
                 )
             )
         return output
+
+    def _semantic_facts(self, document: DocumentContext) -> list[IntelligenceCandidate]:
+        match = PRODUCT_PATTERN.search(document.text)
+        if match is None:
+            return []
+        value = " ".join(match.group("product").split())
+        return [
+            IntelligenceCandidate(
+                field_name="product_name",
+                value=value,
+                normalized_value=value,
+                structured_value={"product_name": value},
+                confidence=0.97,
+                evidence=[document.evidence(match.start("product"), match.end("product"))],
+                validation_notes=["explicit_product_name"],
+            )
+        ]
 
     def _organizations(self, document: DocumentContext) -> list[IntelligenceCandidate]:
         output: list[IntelligenceCandidate] = []
