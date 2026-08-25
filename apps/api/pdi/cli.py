@@ -3,6 +3,7 @@ import asyncio
 import getpass
 import hashlib
 import json
+import os
 import uuid
 from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
@@ -33,6 +34,13 @@ from pdi.storage.reconcile import reconcile_storage
 
 def output(value: object) -> None:
     print(json.dumps(value, indent=2, ensure_ascii=False, default=str))
+
+
+def output_secret_once(value: object) -> None:
+    """Deliver a newly minted credential once to the invoking interactive CLI."""
+    rendered = json.dumps(value, indent=2, ensure_ascii=False, default=str)
+    # File descriptor 1 is the explicit CLI credential channel, not application logging.
+    os.write(1, f"{rendered}\n".encode())
 
 
 async def run_reconcile(cleanup: bool, stale_after: int) -> None:
@@ -142,7 +150,7 @@ async def run_token(arguments: argparse.Namespace) -> None:
                 scopes=arguments.scope,
                 expires_at=expires,
             )
-            output(
+            output_secret_once(
                 {
                     "id": str(token.id),
                     "name": token.name,
