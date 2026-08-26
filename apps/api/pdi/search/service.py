@@ -22,6 +22,7 @@ logger = logging.getLogger("pdi.search")
 QUERY_TERM_PATTERN = re.compile(r"[\wÄÖÜäöüß]+(?:[-./][\wÄÖÜäöüß]+)*", re.UNICODE)
 MAX_SNIPPET_LENGTH = 320
 MAX_SNIPPETS = 2
+MAINTENANCE_BATCH_SIZE = 200
 SEARCHABLE_CANONICAL_FIELDS = {
     "organization",
     "identifier",
@@ -210,59 +211,84 @@ async def refresh_search_index(
 
 
 async def rebuild_search_index(session: AsyncSession) -> SearchMaintenance:
-    documents = list(
-        (
-            await session.scalars(
-                select(Document)
-                .options(selectinload(Document.canonical_extraction))
-                .order_by(Document.id)
-            )
-        ).all()
-    )
+    total = int(await session.scalar(select(func.count()).select_from(Document)) or 0)
     created = updated = 0
-    for document in documents:
-        current = await session.get(SearchDocument, document.id)
-        before = current.search_content_hash if current else None
-        _, was_created = await refresh_search_index(
-            session, document, document.canonical_extraction
+    cursor: uuid.UUID | None = None
+    while True:
+        statement = (
+            select(Document)
+            .options(selectinload(Document.canonical_extraction))
+            .order_by(Document.id)
+            .limit(MAINTENANCE_BATCH_SIZE)
         )
-        created += was_created
-        updated += (
-            not was_created
-            and before != search_values(document, document.canonical_extraction).content_hash
-        )
+        if cursor is not None:
+            statement = statement.where(Document.id > cursor)
+        documents = list((await session.scalars(statement)).all())
+        if not documents:
+            break
+        document_ids = [document.id for document in documents]
+        current = {
+            item.document_id: item
+            for item in await session.scalars(
+                select(SearchDocument).where(SearchDocument.document_id.in_(document_ids))
+            )
+        }
+        for document in documents:
+            indexed = current.get(document.id)
+            before = indexed.search_content_hash if indexed else None
+            _, was_created = await refresh_search_index(
+                session, document, document.canonical_extraction
+            )
+            created += was_created
+            updated += (
+                not was_created
+                and before != search_values(document, document.canonical_extraction).content_hash
+            )
+        cursor = documents[-1].id
+        await session.flush()
+        session.expunge_all()
     await session.commit()
-    return SearchMaintenance(
-        documents=len(documents), indexed=len(documents), created=created, updated=updated
-    )
+    return SearchMaintenance(documents=total, indexed=total, created=created, updated=updated)
 
 
 async def verify_search_index(session: AsyncSession) -> SearchMaintenance:
-    documents = list(
-        (
-            await session.scalars(
-                select(Document)
-                .options(selectinload(Document.canonical_extraction))
-                .order_by(Document.id)
-            )
-        ).all()
-    )
-    indexes = {
-        item.document_id: item for item in (await session.scalars(select(SearchDocument))).all()
-    }
+    total = int(await session.scalar(select(func.count()).select_from(Document)) or 0)
+    indexed_total = int(await session.scalar(select(func.count()).select_from(SearchDocument)) or 0)
     missing = stale = 0
-    for document in documents:
-        indexed = indexes.get(document.id)
-        if indexed is None:
-            missing += 1
-        elif (
-            indexed.search_content_hash
-            != search_values(document, document.canonical_extraction).content_hash
-        ):
-            stale += 1
+    cursor: uuid.UUID | None = None
+    while True:
+        statement = (
+            select(Document)
+            .options(selectinload(Document.canonical_extraction))
+            .order_by(Document.id)
+            .limit(MAINTENANCE_BATCH_SIZE)
+        )
+        if cursor is not None:
+            statement = statement.where(Document.id > cursor)
+        documents = list((await session.scalars(statement)).all())
+        if not documents:
+            break
+        document_ids = [document.id for document in documents]
+        indexes = {
+            item.document_id: item
+            for item in await session.scalars(
+                select(SearchDocument).where(SearchDocument.document_id.in_(document_ids))
+            )
+        }
+        for document in documents:
+            indexed = indexes.get(document.id)
+            if indexed is None:
+                missing += 1
+            elif (
+                indexed.search_content_hash
+                != search_values(document, document.canonical_extraction).content_hash
+            ):
+                stale += 1
+        cursor = documents[-1].id
+        session.expunge_all()
     return SearchMaintenance(
-        documents=len(documents),
-        indexed=len(indexes),
+        documents=total,
+        indexed=indexed_total,
         missing=missing,
         stale=stale,
     )

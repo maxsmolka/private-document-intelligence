@@ -27,6 +27,7 @@ pdi-benchmark-intelligence = "pdi.intelligence.benchmark:main"
 pdi-benchmark-retrieval = "pdi.search.benchmark:main"
 pdi-benchmark-knowledge = "pdi.knowledge.benchmark:main"
 pdi-benchmark-operations = "pdi.operations.benchmark:main"
+pdi-benchmark-architecture = "pdi.architecture.benchmark:main"
 
 [dependency-groups]
 dev = [

@@ -19,7 +19,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
-from pdi.documents.models import Base
+from pdi.core.models import Base
 
 
 class MigrationStatus(StrEnum):

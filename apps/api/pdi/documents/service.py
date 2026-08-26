@@ -9,6 +9,7 @@ from fastapi import HTTPException, UploadFile, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from pdi.core.concurrency import advisory_xact_lock
 from pdi.documents.models import Document, DocumentStatus, LifeArea
 from pdi.ingestion.models import DocumentAsset, DocumentAssetKind
 from pdi.ingestion.queue import enqueue_document
@@ -57,6 +58,7 @@ async def create_document(
     filename, mime_type = await validate_upload(file)
     storage_key = f"{uuid.uuid4()}{EXTENSIONS[mime_type]}"
     stored = await storage.store(storage_key, file, max_size)
+    await advisory_xact_lock(session, "document-content", stored.sha256)
     existing = await session.scalar(
         select(Document).where(Document.sha256 == stored.sha256).order_by(Document.created_at)
     )
@@ -170,6 +172,7 @@ async def ingest_path(
     key = f"{uuid.uuid4()}{EXTENSIONS[mime_type]}"
     stored = await storage.store_path(key, path, max_size)
     if deduplicate:
+        await advisory_xact_lock(session, "document-content", stored.sha256)
         existing = await session.scalar(
             select(Document).where(Document.sha256 == stored.sha256).order_by(Document.created_at)
         )

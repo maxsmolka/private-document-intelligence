@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import func, select
+from sqlalchemy import event, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from pdi.documents.models import Document, DocumentStatus, LifeArea
@@ -413,6 +413,33 @@ async def test_near_simultaneous_exact_proposals_create_one_organization(
         )
         assert len(organizations) == 1
         assert {item.resolved_resource_id for item in proposals} == {organizations[0].id}
+
+
+async def test_knowledge_review_batches_organization_resolution_queries(
+    client: AsyncClient, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    async with session_factory() as session:
+        for number in range(50):
+            await pending_organization_proposal(
+                session, f"batch-{number}", f"Synthetic Organization {number}"
+            )
+
+    engine = session_factory.kw["bind"]
+    statements: list[str] = []
+
+    def count_selects(*args: object) -> None:
+        statement = str(args[2])
+        if statement.lstrip().upper().startswith("SELECT"):
+            statements.append(statement)
+
+    event.listen(engine.sync_engine, "before_cursor_execute", count_selects)
+    try:
+        response = await client.get("/api/v1/knowledge/review", params={"limit": 50})
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", count_selects)
+    assert response.status_code == 200
+    assert len(response.json()["items"]) == 50
+    assert len(statements) <= 4
 
 
 async def test_rejected_knowledge_proposal_is_audited(

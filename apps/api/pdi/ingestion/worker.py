@@ -261,6 +261,7 @@ async def process_job(
         extraction=extraction,
         settings=settings,
         request_key=intelligence_request_key,
+        reuse_completed=True,
     )
     if intelligence_run.status == IntelligenceRunStatus.FAILED:
         logger.warning(

@@ -2,7 +2,7 @@ import hashlib
 import uuid
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
     JSON,
@@ -22,7 +22,10 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from pdi.documents.models import Base
+from pdi.core.models import Base
+
+if TYPE_CHECKING:
+    from pdi.documents.models import Document
 
 
 class IngestionJobState(StrEnum):
@@ -338,6 +341,3 @@ class CanonicalMetadataHistory(Base):
     confirmation_source: Mapped[str] = mapped_column(String(50), nullable=False)
     confirmed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     document: Mapped["Document"] = relationship(back_populates="metadata_history")
-
-
-from pdi.documents.models import Document  # noqa: E402

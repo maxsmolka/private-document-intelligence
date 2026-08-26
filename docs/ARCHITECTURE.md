@@ -1,5 +1,7 @@
 # Architecture
 
+The [A1 architecture checkpoint](A1_ARCHITECTURE_CHECKPOINT.md) defines the post-v1.1 stable core, state ownership, invalidation, extension/Atlas/compute boundaries and architecture guardrails. Its [performance baseline](A1_PERFORMANCE_BASELINE.md) records synthetic 100/1,000/10,000-row measurements and regression budgets.
+
 ## Goals and boundaries
 
 PDI is the authoritative, local-first system of record for documents, originals, extracted text, metadata, review state, search, and document lifecycle. It is designed for modest home-server and NAS hardware with direct data flow, explicit schema evolution, and replaceable components only where a concrete alternative exists.

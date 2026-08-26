@@ -19,7 +19,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
-from pdi.documents.models import Base, LifeArea
+from pdi.core.models import Base
+from pdi.documents.models import LifeArea
 from pdi.ingestion.models import ProposalStatus
 
 KNOWLEDGE_SCHEMA_VERSION = "1"
