@@ -16,7 +16,7 @@ import qrcode.image.svg
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerifyMismatchError
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from fastapi import HTTPException, Request, status
+from fastapi import HTTPException, Request, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -78,6 +78,8 @@ async def create_user(
     username: str,
     password: str,
     role: UserRole = UserRole.ADMIN,
+    *,
+    commit: bool = True,
 ) -> LocalUser:
     normalized = username.strip().casefold()
     if not normalized or len(normalized) > 100:
@@ -86,8 +88,52 @@ async def create_user(
         raise ValueError("Username already exists")
     user = LocalUser(username=normalized, password_hash=hash_password(password), role=role)
     session.add(user)
-    await session.commit()
+    if commit:
+        await session.commit()
     return user
+
+
+async def issue_session(
+    session: AsyncSession, user: LocalUser, settings: Settings
+) -> tuple[str, str]:
+    """Create a normal browser session without committing the surrounding transaction."""
+
+    now = datetime.now(UTC)
+    session_token = secrets.token_urlsafe(48)
+    csrf = secrets.token_urlsafe(32)
+    session.add(
+        UserSession(
+            user_id=user.id,
+            token_hash=digest(session_token),
+            csrf_hash=digest(csrf),
+            expires_at=now + timedelta(seconds=settings.session_ttl_seconds),
+        )
+    )
+    user.last_login_at = now
+    return session_token, csrf
+
+
+def set_auth_cookies(response: Response, settings: Settings, session_token: str, csrf: str) -> None:
+    """Deliver a normal PDI session using the shared cookie security policy."""
+
+    response.set_cookie(
+        SESSION_COOKIE,
+        session_token,
+        max_age=settings.session_ttl_seconds,
+        httponly=True,
+        secure=settings.auth_secure_cookies,
+        samesite="strict",
+        path="/",
+    )
+    response.set_cookie(
+        CSRF_COOKIE,
+        csrf,
+        max_age=settings.session_ttl_seconds,
+        httponly=False,
+        secure=settings.auth_secure_cookies,
+        samesite="strict",
+        path="/",
+    )
 
 
 def audit_event(
@@ -415,17 +461,7 @@ async def login(
                 actor_user_id=user.id,
                 target_user_id=user.id,
             )
-    now = datetime.now(UTC)
-    session_token = secrets.token_urlsafe(48)
-    csrf = secrets.token_urlsafe(32)
-    session.add(
-        UserSession(
-            user_id=user.id,
-            token_hash=digest(session_token),
-            csrf_hash=digest(csrf),
-            expires_at=now + timedelta(seconds=settings.session_ttl_seconds),
-        )
-    )
+    session_token, csrf = await issue_session(session, user, settings)
     session.add(LoginAttempt(username=normalized, source_hash=source_hash, successful=True))
     audit_event(
         session,
@@ -434,6 +470,5 @@ async def login(
         target_user_id=user.id,
         detail={"factor": "recovery_code" if recovery_code else "totp" if totp else "password"},
     )
-    user.last_login_at = now
     await session.commit()
     return LoginResult(user=user, session_token=session_token, csrf=csrf)

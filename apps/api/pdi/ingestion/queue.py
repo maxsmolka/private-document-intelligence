@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from pdi.core.concurrency import advisory_xact_lock
 from pdi.documents.models import Document, DocumentStatus
 from pdi.ingestion.models import IngestionJob, IngestionJobEvent, IngestionJobState
 from pdi.ingestion.state import validate_transition
@@ -191,6 +192,7 @@ async def recover_stale_jobs(
 async def retry_document_job(
     session: AsyncSession, document: Document, max_attempts: int
 ) -> IngestionJob:
+    await advisory_xact_lock(session, "document-job", str(document.id))
     active = await session.scalar(
         select(IngestionJob)
         .where(

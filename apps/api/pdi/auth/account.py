@@ -11,9 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pdi.auth.router import require_auth
 from pdi.auth.service import (
     ALL_SCOPES,
-    CSRF_COOKIE,
     READ_SCOPES,
-    SESSION_COOKIE,
     Principal,
     audit_event,
     create_api_token,
@@ -23,6 +21,7 @@ from pdi.auth.service import (
     generate_totp_secret,
     hash_password,
     replace_recovery_codes,
+    set_auth_cookies,
     totp_setup_payload,
     verify_password,
     verify_totp,
@@ -108,27 +107,6 @@ class TokenItem(BaseModel):
 class TokenCreated(TokenItem):
     token: str
     shown_once: bool = True
-
-
-def set_auth_cookies(response: Response, settings: Settings, session_token: str, csrf: str) -> None:
-    response.set_cookie(
-        SESSION_COOKIE,
-        session_token,
-        max_age=settings.session_ttl_seconds,
-        httponly=True,
-        secure=settings.auth_secure_cookies,
-        samesite="strict",
-        path="/",
-    )
-    response.set_cookie(
-        CSRF_COOKIE,
-        csrf,
-        max_age=settings.session_ttl_seconds,
-        httponly=False,
-        secure=settings.auth_secure_cookies,
-        samesite="strict",
-        path="/",
-    )
 
 
 async def verified_user(session: AsyncSession, principal: Principal, password: str) -> LocalUser:

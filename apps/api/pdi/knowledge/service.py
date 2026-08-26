@@ -60,7 +60,9 @@ def enum_value[E: StrEnum](enum_type: type[E], value: Any, field: str) -> E:
 
 
 async def proposal_for_review(session: AsyncSession, proposal_id: uuid.UUID) -> KnowledgeProposal:
-    proposal = await session.get(KnowledgeProposal, proposal_id)
+    proposal = await session.scalar(
+        select(KnowledgeProposal).where(KnowledgeProposal.id == proposal_id).with_for_update()
+    )
     if proposal is None:
         raise HTTPException(status_code=404, detail="Knowledge proposal not found")
     if proposal.status != ProposalStatus.PENDING:
@@ -176,43 +178,85 @@ async def lock_organization_identity(
 async def resolve_exact_organization(
     session: AsyncSession, name: str, payload: dict[str, Any]
 ) -> tuple[Organization | None, str | None]:
-    normalized = normalize_name(name)
-    organization = await session.scalar(
-        select(Organization)
-        .outerjoin(OrganizationAlias, OrganizationAlias.organization_id == Organization.id)
-        .where(
-            Organization.status == OrganizationStatus.ACTIVE,
-            or_(
-                Organization.normalized_name == normalized,
-                OrganizationAlias.normalized_alias == normalized,
-            ),
+    matches = await resolve_exact_organizations(session, {0: (name, payload)})
+    return matches.get(0, (None, None))
+
+
+async def resolve_exact_organizations[K](
+    session: AsyncSession, candidates: dict[K, tuple[str, dict[str, Any]]]
+) -> dict[K, tuple[Organization, str]]:
+    """Resolve one review page with a bounded number of queries instead of per-row lookups."""
+
+    normalized = {key: normalize_name(name) for key, (name, _payload) in candidates.items()}
+    names = {value for value in normalized.values() if value}
+    canonical: dict[str, Organization] = {}
+    aliases: dict[str, Organization] = {}
+    if names:
+        rows = await session.execute(
+            select(Organization, OrganizationAlias.normalized_alias)
+            .outerjoin(OrganizationAlias, OrganizationAlias.organization_id == Organization.id)
+            .where(
+                Organization.status == OrganizationStatus.ACTIVE,
+                or_(
+                    Organization.normalized_name.in_(names),
+                    OrganizationAlias.normalized_alias.in_(names),
+                ),
+            )
+            .order_by(Organization.created_at, Organization.id)
         )
-        .order_by(Organization.created_at, Organization.id)
+        for organization, normalized_alias in rows:
+            canonical.setdefault(organization.normalized_name, organization)
+            if normalized_alias:
+                aliases.setdefault(normalized_alias, organization)
+
+    matches: dict[K, tuple[Organization, str]] = {}
+    for key, value in normalized.items():
+        if value in canonical:
+            matches[key] = (canonical[value], "exact normalized canonical name")
+        elif value in aliases:
+            matches[key] = (aliases[value], "exact normalized alias")
+
+    unresolved = {
+        key: strong_organization_identifiers(payload)
+        for key, (_name, payload) in candidates.items()
+        if key not in matches
+    }
+    unresolved = {key: values for key, values in unresolved.items() if values}
+    if not unresolved:
+        return matches
+
+    accepted = list(
+        (
+            await session.execute(
+                select(KnowledgeProposal.resolved_resource_id, KnowledgeProposal.payload)
+                .where(
+                    KnowledgeProposal.proposal_type == KnowledgeProposalType.ORGANIZATION,
+                    KnowledgeProposal.status == ProposalStatus.ACCEPTED,
+                    KnowledgeProposal.resolved_resource_id.is_not(None),
+                )
+                .order_by(KnowledgeProposal.created_at, KnowledgeProposal.id)
+            )
+        ).all()
     )
-    if organization is not None:
-        reason = (
-            "exact normalized canonical name"
-            if organization.normalized_name == normalized
-            else "exact normalized alias"
+    organization_ids = {organization_id for organization_id, _payload in accepted}
+    organizations = {
+        item.id: item
+        for item in await session.scalars(
+            select(Organization).where(
+                Organization.id.in_(organization_ids),
+                Organization.status == OrganizationStatus.ACTIVE,
+            )
         )
-        return organization, reason
-    identifiers = strong_organization_identifiers(payload)
-    if not identifiers:
-        return None, None
-    accepted = await session.execute(
-        select(KnowledgeProposal.resolved_resource_id, KnowledgeProposal.payload).where(
-            KnowledgeProposal.proposal_type == KnowledgeProposalType.ORGANIZATION,
-            KnowledgeProposal.status == ProposalStatus.ACCEPTED,
-            KnowledgeProposal.resolved_resource_id.is_not(None),
-        )
-    )
-    for organization_id, accepted_payload in accepted:
-        if not identifiers.intersection(strong_organization_identifiers(accepted_payload)):
-            continue
-        organization = await session.get(Organization, organization_id)
-        if organization is not None and organization.status == OrganizationStatus.ACTIVE:
-            return organization, "exact strong organization identifier"
-    return None, None
+    }
+    for key, identifiers in unresolved.items():
+        for organization_id, accepted_payload in accepted:
+            organization = organizations.get(organization_id)
+            if organization is not None and identifiers.intersection(
+                strong_organization_identifiers(accepted_payload)
+            ):
+                matches[key] = (organization, "exact strong organization identifier")
+                break
+    return matches
 
 
 async def accept_organization(
@@ -501,6 +545,9 @@ async def accept_knowledge_proposal(
     session: AsyncSession, proposal_id: uuid.UUID, decision: KnowledgeDecision
 ) -> KnowledgeProposal:
     proposal = await proposal_for_review(session, proposal_id)
+    await session.scalar(
+        select(Document.id).where(Document.id == proposal.document_id).with_for_update()
+    )
     handlers = {
         KnowledgeProposalType.ORGANIZATION: accept_organization,
         KnowledgeProposalType.CONTRACT: accept_contract,
@@ -525,7 +572,9 @@ async def accept_knowledge_proposal(
 async def reject_knowledge_proposal(
     session: AsyncSession, proposal_id: uuid.UUID
 ) -> KnowledgeProposal:
-    proposal = await session.get(KnowledgeProposal, proposal_id)
+    proposal = await session.scalar(
+        select(KnowledgeProposal).where(KnowledgeProposal.id == proposal_id).with_for_update()
+    )
     if proposal is None:
         raise HTTPException(status_code=404, detail="Knowledge proposal not found")
     if proposal.status != ProposalStatus.PENDING:
@@ -553,8 +602,17 @@ async def merge_organizations(
 ) -> Organization:
     if source_id == target_id:
         raise HTTPException(status_code=422, detail="Organizations must be distinct")
-    source = await session.get(Organization, source_id)
-    target = await session.get(Organization, target_id)
+    locked = list(
+        await session.scalars(
+            select(Organization)
+            .where(Organization.id.in_((source_id, target_id)))
+            .order_by(Organization.id)
+            .with_for_update()
+        )
+    )
+    by_id = {item.id: item for item in locked}
+    source = by_id.get(source_id)
+    target = by_id.get(target_id)
     if (
         not source
         or not target
@@ -581,6 +639,13 @@ async def merge_organizations(
             )
         ).all()
     )
+    if source_docs:
+        await session.scalars(
+            select(Document.id)
+            .where(Document.id.in_(sorted(link.document_id for link in source_docs)))
+            .order_by(Document.id)
+            .with_for_update()
+        )
     for link in source_docs:
         target_link = await session.get(OrganizationDocument, (target_id, link.document_id))
         if target_link is None:
@@ -654,7 +719,9 @@ async def merge_organizations(
 async def update_action_status(
     session: AsyncSession, item_id: uuid.UUID, new_status: ActionStatus
 ) -> ActionItem:
-    item = await session.get(ActionItem, item_id)
+    item = await session.scalar(
+        select(ActionItem).where(ActionItem.id == item_id).with_for_update()
+    )
     if item is None:
         raise HTTPException(status_code=404, detail="Action item not found")
     previous = item.status
@@ -677,7 +744,9 @@ async def update_action_status(
 async def update_deadline_status(
     session: AsyncSession, deadline_id: uuid.UUID, new_status: DeadlineStatus
 ) -> Deadline:
-    deadline = await session.get(Deadline, deadline_id)
+    deadline = await session.scalar(
+        select(Deadline).where(Deadline.id == deadline_id).with_for_update()
+    )
     if deadline is None:
         raise HTTPException(status_code=404, detail="Deadline not found")
     previous = deadline.status

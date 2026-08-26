@@ -61,6 +61,7 @@ async def run_intelligence(
     extraction: DocumentExtraction,
     settings: Settings,
     request_key: str,
+    reuse_completed: bool = False,
 ) -> IntelligenceRun:
     existing = await session.scalar(
         select(IntelligenceRun).where(IntelligenceRun.request_key == request_key)
@@ -69,6 +70,27 @@ async def run_intelligence(
         return existing
 
     provider = configured_provider(settings)
+    if reuse_completed:
+        completed = await session.scalar(
+            select(IntelligenceRun)
+            .where(
+                IntelligenceRun.document_id == document.id,
+                IntelligenceRun.input_extraction_id == extraction.id,
+                IntelligenceRun.input_content_hash == extraction.content_hash,
+                IntelligenceRun.provider == provider.name,
+                IntelligenceRun.provider_version == provider.provider_version,
+                IntelligenceRun.schema_version == provider.schema_version,
+                IntelligenceRun.prompt_version == provider.prompt_version,
+                IntelligenceRun.status == IntelligenceRunStatus.COMPLETED,
+            )
+            .order_by(
+                IntelligenceRun.is_current.desc(),
+                IntelligenceRun.created_at.desc(),
+                IntelligenceRun.id.desc(),
+            )
+        )
+        if completed is not None:
+            return completed
     started_at = datetime.now(UTC)
     run = IntelligenceRun(
         document_id=document.id,

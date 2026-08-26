@@ -18,6 +18,14 @@ from pdi.ingestion.schemas import ConfirmMetadata, ProposalDecision
 from pdi.search.service import refresh_search_index
 
 
+async def lock_document(session: AsyncSession, document_id: uuid.UUID) -> None:
+    found = await session.scalar(
+        select(Document.id).where(Document.id == document_id).with_for_update()
+    )
+    if found is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+
 async def review_documents(
     session: AsyncSession, *, limit: int, offset: int
 ) -> tuple[list[Document], int]:
@@ -106,6 +114,7 @@ def record_history(
 async def confirm_document(
     session: AsyncSession, document_id: uuid.UUID, values: ConfirmMetadata
 ) -> Document:
+    await lock_document(session, document_id)
     document = await review_detail(session, document_id)
     before = {
         "title": document.title,
@@ -149,10 +158,12 @@ async def proposal_for_document(
     session: AsyncSession, document_id: uuid.UUID, proposal_id: uuid.UUID
 ) -> MetadataProposal:
     proposal = await session.scalar(
-        select(MetadataProposal).where(
+        select(MetadataProposal)
+        .where(
             MetadataProposal.id == proposal_id,
             MetadataProposal.document_id == document_id,
         )
+        .with_for_update()
     )
     if proposal is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proposal not found")
@@ -167,6 +178,7 @@ async def accept_document_proposal(
     proposal_id: uuid.UUID,
     decision: ProposalDecision,
 ) -> Document:
+    await lock_document(session, document_id)
     document = await review_detail(session, document_id)
     proposal = await proposal_for_document(session, document_id, proposal_id)
     if proposal.intelligence_run_id is not None and not proposal.evidence_verified:
@@ -246,6 +258,7 @@ async def accept_document_proposal(
 async def reject_document_proposal(
     session: AsyncSession, document_id: uuid.UUID, proposal_id: uuid.UUID
 ) -> MetadataProposal:
+    await lock_document(session, document_id)
     proposal = await proposal_for_document(session, document_id, proposal_id)
     proposal.status = ProposalStatus.REJECTED
     proposal.confirmed_at = datetime.now(UTC)
@@ -256,6 +269,7 @@ async def reject_document_proposal(
 async def reject_document_proposals(
     session: AsyncSession, document_id: uuid.UUID, field_names: list[str] | None
 ) -> Document:
+    await lock_document(session, document_id)
     document = await review_detail(session, document_id)
     selected = set(field_names) if field_names else None
     now = datetime.now(UTC)

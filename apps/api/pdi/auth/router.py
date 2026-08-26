@@ -14,6 +14,7 @@ from pdi.auth.service import (
     authenticate,
     digest,
     login,
+    set_auth_cookies,
 )
 from pdi.core.config import Settings, get_settings
 from pdi.core.database import get_session
@@ -72,24 +73,7 @@ async def login_route(
             two_factor_required=True,
         )
     assert result.session_token and result.csrf
-    response.set_cookie(
-        SESSION_COOKIE,
-        result.session_token,
-        max_age=settings.session_ttl_seconds,
-        httponly=True,
-        secure=settings.auth_secure_cookies,
-        samesite="strict",
-        path="/",
-    )
-    response.set_cookie(
-        CSRF_COOKIE,
-        result.csrf,
-        max_age=settings.session_ttl_seconds,
-        httponly=False,
-        secure=settings.auth_secure_cookies,
-        samesite="strict",
-        path="/",
-    )
+    set_auth_cookies(response, settings, result.session_token, result.csrf)
     return SessionRead(
         username=result.user.username,
         role=result.user.role.value,

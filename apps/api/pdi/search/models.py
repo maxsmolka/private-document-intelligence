@@ -6,7 +6,7 @@ from sqlalchemy import JSON, DateTime, ForeignKey, Index, String, Text, func
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from pdi.documents.models import Base
+from pdi.core.models import Base
 
 if TYPE_CHECKING:
     from pdi.documents.models import Document

@@ -7,6 +7,7 @@ from pdi.auth.account import router as account_router
 from pdi.auth.admin import router as admin_router
 from pdi.auth.router import require_auth
 from pdi.auth.router import router as auth_router
+from pdi.auth.setup import router as setup_router
 from pdi.core.config import get_settings
 from pdi.core.logging import configure_logging
 from pdi.core.middleware import RequestContextMiddleware
@@ -33,6 +34,7 @@ def create_app() -> FastAPI:
     application.add_middleware(RequestContextMiddleware)
     application.include_router(health_router)
     application.include_router(auth_router)
+    application.include_router(setup_router)
     protected = [Depends(require_auth)]
     application.include_router(documents_router, dependencies=protected)
     application.include_router(review_router, dependencies=protected)

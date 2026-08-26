@@ -87,3 +87,49 @@ async def auth_client(
     app.dependency_overrides[get_storage] = lambda: storage
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as test_client:
         yield test_client
+
+
+@pytest.fixture
+async def setup_client_without_totp_key(
+    tmp_path: Path, session_factory: async_sessionmaker[AsyncSession]
+) -> AsyncIterator[AsyncClient]:
+    settings = Settings(
+        env="test",
+        database_url=f"sqlite+aiosqlite:///{tmp_path / 'test.db'}",
+        storage_path=tmp_path / "storage",
+        auth_enabled=True,
+        auth_secure_cookies=False,
+    )
+
+    async def session_override() -> AsyncIterator[AsyncSession]:
+        async with session_factory() as session:
+            yield session
+
+    app = create_app()
+    app.dependency_overrides[get_session] = session_override
+    app.dependency_overrides[get_settings] = lambda: settings
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as test_client:
+        yield test_client
+
+
+@pytest.fixture
+async def setup_disabled_client(
+    tmp_path: Path, session_factory: async_sessionmaker[AsyncSession]
+) -> AsyncIterator[AsyncClient]:
+    settings = Settings(
+        env="test",
+        database_url=f"sqlite+aiosqlite:///{tmp_path / 'test.db'}",
+        storage_path=tmp_path / "storage",
+        auth_enabled=True,
+        setup_enabled=False,
+    )
+
+    async def session_override() -> AsyncIterator[AsyncSession]:
+        async with session_factory() as session:
+            yield session
+
+    app = create_app()
+    app.dependency_overrides[get_session] = session_override
+    app.dependency_overrides[get_settings] = lambda: settings
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as test_client:
+        yield test_client

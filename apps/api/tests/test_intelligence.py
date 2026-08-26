@@ -186,9 +186,18 @@ async def test_intelligence_runs_are_idempotent_and_supersede_only_after_success
             settings=settings,
             request_key="test:second",
         )
+        resumed_ingestion = await run_intelligence(
+            session,
+            document=document,
+            extraction=extraction,
+            settings=settings,
+            request_key="test:later-worker-attempt",
+            reuse_completed=True,
+        )
         assert first.id == repeated.id
         assert first.status == IntelligenceRunStatus.COMPLETED
         assert second.is_current is True
+        assert resumed_ingestion.id == second.id
         runs = list((await session.scalars(select(IntelligenceRun))).all())
         assert len(runs) == 2
         assert sum(run.is_current for run in runs) == 1

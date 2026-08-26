@@ -23,7 +23,7 @@ COPY tests ./tests
 CMD ["uv", "run", "pytest"]
 
 FROM python:3.13-slim-trixie AS runtime
-ARG PDI_VERSION=1.1.0
+ARG PDI_VERSION=1.1.2
 ARG PDI_REVISION=unknown
 ARG PDI_BUILD_TIME=unknown
 ARG PDI_SOURCE=https://github.com/maxsmolka/private-document-intelligence
@@ -45,7 +45,7 @@ RUN apt-get update \
     && groupadd --system --gid 10001 pdi \
     && useradd --system --uid 10001 --gid pdi --home-dir /app pdi \
     && mkdir -p /data/documents /app /consume /consume-processed /consume-failed /backups \
-    && chown -R pdi:pdi /data /app
+    && chown -R pdi:pdi /data /app /backups /consume /consume-processed /consume-failed
 WORKDIR /app
 COPY --from=builder /opt/venv /opt/venv
 COPY --from=builder --chown=pdi:pdi /app/pdi ./pdi

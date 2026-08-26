@@ -4,14 +4,20 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from sqlalchemy import JSON, BigInteger, Date, DateTime, Enum, ForeignKey, Index, String, Uuid, func
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from pdi.core.models import Base as Base
 
 if TYPE_CHECKING:
+    from pdi.ingestion.models import (
+        CanonicalMetadataHistory,
+        DocumentAsset,
+        DocumentExtraction,
+        IngestionJob,
+        IntelligenceRun,
+        MetadataProposal,
+    )
     from pdi.search.models import SearchDocument
-
-
-class Base(DeclarativeBase):
-    pass
 
 
 class DocumentStatus(StrEnum):
@@ -116,13 +122,3 @@ class Document(Base):
         self.canonical_extraction = value
         if value is not None and value not in self.extractions:
             self.extractions.append(value)
-
-
-from pdi.ingestion.models import (  # noqa: E402
-    CanonicalMetadataHistory,
-    DocumentAsset,
-    DocumentExtraction,
-    IngestionJob,
-    IntelligenceRun,
-    MetadataProposal,
-)

@@ -1,5 +1,6 @@
 from datetime import date
 
+import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -196,3 +197,25 @@ async def test_index_updates_and_rebuild_are_idempotent(
         await session.commit()
         assert indexed.body_text == "Vollständig neuer Extraktionsinhalt"
         assert indexed.extraction_content_hash == "9" * 64
+
+
+async def test_search_maintenance_crosses_bounded_batches(
+    session_factory: async_sessionmaker[AsyncSession], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pdi.search import service
+
+    monkeypatch.setattr(service, "MAINTENANCE_BATCH_SIZE", 2)
+    async with session_factory() as session:
+        for number in range(5):
+            await seed_search_document(
+                session,
+                title=f"Batch {number}",
+                body=f"Content {number}",
+                suffix=f"batch-{number}",
+            )
+        verified = await verify_search_index(session)
+        rebuilt = await rebuild_search_index(session)
+        assert verified.documents == verified.indexed == 5
+        assert verified.missing == verified.stale == 0
+        assert rebuilt.documents == rebuilt.indexed == 5
+        assert rebuilt.created == rebuilt.updated == 0

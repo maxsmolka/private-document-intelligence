@@ -2,6 +2,23 @@
 
 All notable changes are documented here. PDI follows Semantic Versioning.
 
+## [1.1.2] - 2026-08-26
+
+### Added
+
+- Add a responsive browser first-run wizard that creates the first administrator, starts a normal authenticated session, and optionally reuses the existing TOTP/recovery-code flow.
+- Add a minimal unauthenticated setup-status contract and a same-origin, zero-user-only first-admin endpoint.
+
+### Security
+
+- Serialize first-user creation with a PostgreSQL transaction advisory lock and recheck authoritative user state inside the protected transaction.
+- Permanently close browser setup after any user exists, validate setup request origins, retain an operator-controlled browser-setup switch, and record secret-free bootstrap audit events.
+
+### Architecture and operations
+
+- Include the reviewed A1 core-boundary, concurrency, idempotency, bounded search-maintenance, query, benchmark, and ADR hardening.
+- Preserve the CLI first-user path through the shared bootstrap service. No database migration or search reindex is required.
+
 ## [1.1.0] - 2026-08-26
 
 ### Added
@@ -69,6 +86,7 @@ All notable changes are documented here. PDI follows Semantic Versioning.
 - Local Argon2id accounts, revocable sessions and API tokens, CSRF protection, upload validation, bounded OCR, non-root containers, and privacy-safe logging.
 
 [1.1.0]: https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.1.0
+[1.1.2]: https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.1.2
 [1.0.2]: https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.0.2
 [1.0.1]: https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.0.1
 [1.0.0]: https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.0.0

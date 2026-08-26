@@ -9,7 +9,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [navigationOpen, setNavigationOpen] = useState(false);
   const pathname = usePathname();
 
-  if (pathname === "/login") return <main>{children}</main>;
+  if (pathname === "/login" || pathname === "/setup") return <main>{children}</main>;
 
   return (
     <div className="min-h-dvh">
