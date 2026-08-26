@@ -53,7 +53,12 @@ async def upload_document(
     file: Annotated[UploadFile, File()],
 ) -> DocumentUploadResult:
     document, duplicate = await create_document(
-        session, storage, file, settings.max_upload_size, settings.worker_max_attempts
+        session,
+        storage,
+        file,
+        settings.max_upload_size,
+        settings.worker_max_attempts,
+        settings.worker_job_timeout,
     )
     if duplicate:
         response.status_code = status.HTTP_200_OK
@@ -250,5 +255,7 @@ async def retry_document(
     document_id: UUID, session: Session, settings: AppSettings
 ) -> IngestionJobRead:
     document = await get_document(session, document_id)
-    job = await retry_document_job(session, document, settings.worker_max_attempts)
+    job = await retry_document_job(
+        session, document, settings.worker_max_attempts, settings.worker_job_timeout
+    )
     return IngestionJobRead.model_validate(job)

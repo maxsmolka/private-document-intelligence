@@ -5,8 +5,9 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from pdi.documents.models import Document, DocumentStatus, LifeArea
+from pdi.execution.specification import ResourceClass
 from pdi.ingestion.models import DocumentExtraction, IngestionJob
-from pdi.ingestion.queue import claim_job, enqueue_document
+from pdi.ingestion.queue import acquire_resource_lease, claim_job, enqueue_document
 from pdi.knowledge.models import DatePrecision, EventType, Organization, TimelineEvent
 from pdi.search.service import refresh_search_index, search_documents
 
@@ -38,6 +39,57 @@ async def test_concurrent_postgres_claims_are_distinct(
     first, second = await asyncio.gather(claim("one"), claim("two"))
     assert first is not None and second is not None
     assert first.id != second.id
+
+
+async def test_postgres_admission_and_stage_leases_enforce_cross_worker_limits(
+    postgres_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with postgres_factory() as session:
+        for number in range(2):
+            document = Document(
+                title=f"Resource {number}",
+                original_filename=f"resource-{number}.pdf",
+                mime_type="application/pdf",
+                file_size=10,
+                sha256=f"{number + 20:064x}",
+                storage_key=f"resource-{number}.pdf",
+                status=DocumentStatus.INBOX,
+                life_area=LifeArea.OTHER,
+                source="test",
+            )
+            session.add(document)
+            await enqueue_document(session, document, 3)
+        await session.commit()
+
+    async def claim(worker: str) -> IngestionJob | None:
+        async with postgres_factory() as session:
+            return await claim_job(session, worker, resource_limits={ResourceClass.CPU_HEAVY: 1})
+
+    first, blocked = await asyncio.gather(claim("one"), claim("two"))
+    assert (first is None) != (blocked is None)
+
+    async with postgres_factory() as session:
+        second = await claim_job(session, "two")
+        assert second is not None
+
+    claimed = [item for item in (first, blocked, second) if item is not None]
+    assert len(claimed) == 2
+
+    async def acquire(job_id: object, worker: str) -> bool:
+        async with postgres_factory() as session:
+            job = await session.get(IngestionJob, job_id)
+            assert job is not None
+            return await acquire_resource_lease(
+                session,
+                job,
+                worker_id=worker,
+                resource_class=ResourceClass.OCR,
+                limit=1,
+                stale_seconds=300,
+            )
+
+    leases = await asyncio.gather(acquire(claimed[0].id, "one"), acquire(claimed[1].id, "two"))
+    assert sorted(leases) == [False, True]
 
 
 async def test_postgres_fts_ranking_identifier_filter_and_gin_plan(

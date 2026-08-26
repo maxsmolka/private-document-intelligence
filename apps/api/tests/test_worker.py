@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from pdi.core.config import Settings
 from pdi.documents.models import Document, DocumentStatus, LifeArea
+from pdi.execution.specification import FailureClass
 from pdi.ingestion.extraction import ExtractionResult, OcrTimeoutError
 from pdi.ingestion.models import (
     DocumentAsset,
@@ -225,6 +226,7 @@ async def test_worker_keeps_parseable_scanned_pdf_reviewable_when_ocr_times_out(
         await process_job(session, job, "degraded-worker", settings)
         assert job.state == IngestionJobState.COMPLETED
         assert job.stage == "completed_degraded"
+        assert job.failure_class == FailureClass.DEGRADED
         assert document.status == DocumentStatus.NEEDS_REVIEW
         stored = await session.scalar(select(DocumentExtraction))
         assert stored is not None

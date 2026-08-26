@@ -2,8 +2,12 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+EXECUTION_RESOURCE_LIMIT_NAMES = frozenset(
+    {"cpu_light", "cpu_heavy", "io_heavy", "ocr", "local_ai", "maintenance"}
+)
 
 
 class Settings(BaseSettings):
@@ -20,6 +24,18 @@ class Settings(BaseSettings):
     worker_job_timeout: int = Field(default=300, ge=10)
     worker_concurrency: int = Field(default=1, ge=1, le=4)
     worker_identity: str | None = None
+    execution_resource_limits: dict[str, int] = Field(
+        default_factory=lambda: {
+            "cpu_light": 4,
+            "cpu_heavy": 2,
+            "io_heavy": 2,
+            "ocr": 1,
+            "local_ai": 1,
+            "maintenance": 1,
+        }
+    )
+    execution_starvation_seconds: int = Field(default=900, ge=30, le=86_400)
+    execution_heartbeat_seconds: int = Field(default=10, ge=1, le=60)
     ocr_enabled: bool = False
     ocr_provider: Literal["ocrmypdf"] = "ocrmypdf"
     ocr_command_timeout: int = Field(default=180, ge=10)
@@ -59,6 +75,22 @@ class Settings(BaseSettings):
     paperless_token_file: Path | None = None
     paperless_verify_tls: bool = True
     backup_path: Path = Path("./backups")
+
+    @model_validator(mode="after")
+    def validate_execution_policy(self) -> "Settings":
+        unknown = set(self.execution_resource_limits) - EXECUTION_RESOURCE_LIMIT_NAMES
+        invalid = {
+            key: value
+            for key, value in self.execution_resource_limits.items()
+            if value < 1 or value > 64
+        }
+        if unknown:
+            raise ValueError(f"Unknown execution resource classes: {', '.join(sorted(unknown))}")
+        if invalid:
+            raise ValueError("Execution resource limits must be between 1 and 64")
+        if self.execution_heartbeat_seconds * 2 >= self.worker_job_timeout:
+            raise ValueError("Execution heartbeat must be less than half the stale-job timeout")
+        return self
 
 
 @lru_cache

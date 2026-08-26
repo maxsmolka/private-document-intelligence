@@ -19,6 +19,7 @@ from pdi.core.config import Settings, get_settings
 from pdi.core.database import session_factory
 from pdi.core.logging import configure_logging
 from pdi.documents.models import Document, DocumentStatus
+from pdi.execution.specification import FailureClass, ResourceClass
 from pdi.ingestion.extraction import (
     ExtractionError,
     ExtractionResult,
@@ -36,7 +37,18 @@ from pdi.ingestion.models import (
     MetadataProposal,
     ProposalStatus,
 )
-from pdi.ingestion.queue import claim_job, record_failure, recover_stale_jobs, transition_job
+from pdi.ingestion.queue import (
+    acquire_resource_lease,
+    claim_job,
+    heartbeat_job,
+    journal_event,
+    observe_cancellation,
+    record_failure,
+    recover_stale_jobs,
+    release_all_resource_leases,
+    release_resource_lease,
+    transition_job,
+)
 from pdi.ingestion.versions import (
     canonical_extraction_for,
     compare_extractions,
@@ -49,6 +61,36 @@ from pdi.storage.dependencies import get_storage
 
 logger = logging.getLogger("pdi.worker")
 LIVENESS_PATH = Path("/tmp/pdi-worker-alive")
+
+
+async def wait_for_resource(
+    session: AsyncSession,
+    job: IngestionJob,
+    worker_id: str,
+    settings: Settings,
+    resource_class: ResourceClass,
+) -> bool:
+    limit = settings.execution_resource_limits[resource_class.value]
+    while not await acquire_resource_lease(
+        session,
+        job,
+        worker_id=worker_id,
+        resource_class=resource_class,
+        limit=limit,
+        stale_seconds=settings.worker_job_timeout,
+    ):
+        if await observe_cancellation(session, job, worker_id=worker_id):
+            return False
+        await asyncio.sleep(settings.worker_poll_interval)
+    return True
+
+
+def classify_failure(exc: BaseException) -> FailureClass:
+    if isinstance(exc, TimeoutError):
+        return FailureClass.TIMEOUT
+    if isinstance(exc, ExtractionError):
+        return FailureClass.PERMANENT
+    return FailureClass.RETRYABLE
 
 
 async def persist_extraction(
@@ -154,6 +196,8 @@ async def process_job(
     session: AsyncSession, job: IngestionJob, worker_id: str, settings: Settings
 ) -> None:
     started = time.perf_counter()
+    if await observe_cancellation(session, job, worker_id=worker_id):
+        return
     intelligence_request_key = f"ingestion:{job.id}:attempt:{job.attempt_count}"
     document = await session.get(Document, job.document_id)
     if document is None:
@@ -176,28 +220,52 @@ async def process_job(
     if document.mime_type == "application/pdf":
         native_result = await NativePdfProvider().extract(path, document.mime_type)
         ocr_required = bool(native_result.metadata.get("requires_ocr"))
+    if await observe_cancellation(session, job, worker_id=worker_id):
+        return
     if ocr_required and settings.ocr_enabled:
         transition_job(
             session, job, IngestionJobState.OCR, stage="ocr_processing", worker_id=worker_id
         )
         await session.commit()
-    with tempfile.TemporaryDirectory(prefix="pdi-ocr-") as temporary:
-        result = await extract_document(
-            path,
-            document.mime_type,
-            ocr_enabled=settings.ocr_enabled,
-            ocr_timeout=settings.ocr_command_timeout,
-            ocr_language=settings.ocr_language,
-            ocr_provider=settings.ocr_provider,
-            ocr_max_pages=settings.ocr_max_pages,
-            ocr_max_image_mpixels=settings.ocr_max_image_mpixels,
-            ocr_force_rotation=settings.ocr_force_rotation,
-            work_dir=Path(temporary),
-            native_result=native_result,
+        if not await wait_for_resource(session, job, worker_id, settings, ResourceClass.OCR):
+            return
+    try:
+        journal_event(session, job, "provider_started", worker_id=worker_id, detail="extraction")
+        await session.commit()
+        with tempfile.TemporaryDirectory(prefix="pdi-ocr-") as temporary:
+            result = await extract_document(
+                path,
+                document.mime_type,
+                ocr_enabled=settings.ocr_enabled,
+                ocr_timeout=settings.ocr_command_timeout,
+                ocr_language=settings.ocr_language,
+                ocr_provider=settings.ocr_provider,
+                ocr_max_pages=settings.ocr_max_pages,
+                ocr_max_image_mpixels=settings.ocr_max_image_mpixels,
+                ocr_force_rotation=settings.ocr_force_rotation,
+                work_dir=Path(temporary),
+                native_result=native_result,
+            )
+            _, obsolete_derived_key = await persist_derived_asset(
+                session, document.id, result, settings
+            )
+        journal_event(
+            session,
+            job,
+            "provider_completed",
+            worker_id=worker_id,
+            detail="extraction",
+            duration_ms=(time.perf_counter() - extraction_started) * 1000,
+            metadata={"provider": result.provider, "provider_version": result.provider_version},
         )
-        _, obsolete_derived_key = await persist_derived_asset(
-            session, document.id, result, settings
-        )
+        await session.commit()
+    finally:
+        if ocr_required and settings.ocr_enabled:
+            await release_resource_lease(
+                session, job, worker_id=worker_id, resource_class=ResourceClass.OCR
+            )
+    if await observe_cancellation(session, job, worker_id=worker_id):
+        return
     logger.info(
         "extraction_completed",
         extra={
@@ -233,6 +301,8 @@ async def process_job(
     if obsolete_derived_key is not None:
         await get_storage().delete(obsolete_derived_key)
     await session.refresh(document)
+    if await observe_cancellation(session, job, worker_id=worker_id):
+        return
     if document.canonical_extraction_id != extraction.id:
         if document.canonical_extraction_id is None:
             raise ExtractionError("Canonical extraction was not persisted")
@@ -255,14 +325,42 @@ async def process_job(
         )
         await session.commit()
         return
-    intelligence_run = await run_intelligence(
-        session,
-        document=document,
-        extraction=extraction,
-        settings=settings,
-        request_key=intelligence_request_key,
-        reuse_completed=True,
-    )
+    local_ai_acquired = False
+    if settings.intelligence_provider == "ollama":
+        local_ai_acquired = await wait_for_resource(
+            session, job, worker_id, settings, ResourceClass.LOCAL_AI
+        )
+        if not local_ai_acquired:
+            return
+    intelligence_started = time.perf_counter()
+    try:
+        journal_event(session, job, "provider_started", worker_id=worker_id, detail="intelligence")
+        await session.commit()
+        intelligence_run = await run_intelligence(
+            session,
+            document=document,
+            extraction=extraction,
+            settings=settings,
+            request_key=intelligence_request_key,
+            reuse_completed=True,
+        )
+        journal_event(
+            session,
+            job,
+            "provider_completed",
+            worker_id=worker_id,
+            detail="intelligence",
+            duration_ms=(time.perf_counter() - intelligence_started) * 1000,
+            metadata={"provider": settings.intelligence_provider},
+        )
+        await session.commit()
+    finally:
+        if local_ai_acquired:
+            await release_resource_lease(
+                session, job, worker_id=worker_id, resource_class=ResourceClass.LOCAL_AI
+            )
+    if await observe_cancellation(session, job, worker_id=worker_id):
+        return
     if intelligence_run.status == IntelligenceRunStatus.FAILED:
         logger.warning(
             "document_intelligence_failed",
@@ -286,13 +384,20 @@ async def process_job(
     document.status = DocumentStatus.NEEDS_REVIEW
     await refresh_search_index(session, document, extraction)
     await session.refresh(job)
+    degraded = bool(
+        result.metadata.get("degraded") or intelligence_run.status == IntelligenceRunStatus.FAILED
+    )
     transition_job(
         session,
         job,
         IngestionJobState.COMPLETED,
-        stage="completed_degraded" if result.metadata.get("degraded") else "completed",
+        stage="completed_degraded" if degraded else "completed",
         worker_id=worker_id,
+        event_type="degraded" if degraded else "completed",
+        duration_ms=(time.perf_counter() - started) * 1000,
     )
+    if degraded:
+        job.failure_class = FailureClass.DEGRADED
     await session.commit()
     logger.info(
         "ingestion_completed",
@@ -314,7 +419,12 @@ async def run_worker_slot(worker_id: str, settings: Settings, stop_event: asynci
                 await recover_stale_jobs(
                     session, timeout_seconds=settings.worker_job_timeout, worker_id=worker_id
                 )
-                job = await claim_job(session, worker_id)
+                job = await claim_job(
+                    session,
+                    worker_id,
+                    resource_limits=settings.execution_resource_limits,
+                    starvation_seconds=settings.execution_starvation_seconds,
+                )
                 if job is None:
                     with contextlib.suppress(TimeoutError):
                         await asyncio.wait_for(
@@ -332,10 +442,33 @@ async def run_worker_slot(worker_id: str, settings: Settings, stop_event: asynci
                     },
                 )
                 try:
-                    await asyncio.wait_for(
-                        process_job(session, job, worker_id, settings),
-                        timeout=settings.worker_job_timeout,
-                    )
+                    heartbeat_stop = asyncio.Event()
+
+                    async def maintain_claim(
+                        claim_job_id: uuid.UUID = job.id,
+                        claim_stop: asyncio.Event = heartbeat_stop,
+                    ) -> None:
+                        while not claim_stop.is_set():
+                            await heartbeat_job(claim_job_id, worker_id)
+                            with contextlib.suppress(TimeoutError):
+                                await asyncio.wait_for(
+                                    claim_stop.wait(),
+                                    timeout=settings.execution_heartbeat_seconds,
+                                )
+
+                    heartbeat_task = asyncio.create_task(maintain_claim())
+                    completed_without_exception = False
+                    try:
+                        await asyncio.wait_for(
+                            process_job(session, job, worker_id, settings),
+                            timeout=job.timeout_seconds,
+                        )
+                        completed_without_exception = True
+                    finally:
+                        heartbeat_stop.set()
+                        await heartbeat_task
+                        if completed_without_exception:
+                            await release_all_resource_leases(session, job.id, worker_id=worker_id)
                 except Exception as exc:
                     failed_stage = job.stage
                     logger.exception(
@@ -362,6 +495,7 @@ async def run_worker_slot(worker_id: str, settings: Settings, stop_event: asynci
                         worker_id=worker_id,
                         category=category,
                         safe_message=f"Processing failed during {failed_stage}",
+                        failure_class=classify_failure(exc),
                     )
         except Exception:
             logger.exception("worker_loop_error", extra={"operation": "poll"})

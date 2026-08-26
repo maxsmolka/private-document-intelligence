@@ -54,11 +54,13 @@ stateDiagram-v2
 
 `DocumentStatus` represents the user-facing lifecycle (`inbox`, `processing`, `needs_review`, `ready`, `archived`, `failed`). `IngestionJobState` represents worker execution. Valid transitions live in one testable state machine; every transition creates an `IngestionJobEvent` in the same transaction as the job change.
 
+A2 adds explicit task specifications, priorities, resource-aware admission, cooperative cancellation, timeout/failure semantics, durable stage leases and bounded operational metrics while retaining this queue and document ownership. See [A2 Execution Architecture](A2_EXECUTION_ARCHITECTURE.md).
+
 Upload streams to a same-directory `.part` file, calculates SHA-256, enforces the byte limit, and atomically renames to a UUID key. The API commits the document, original `DocumentAsset`, and queued job together. Original assets are immutable. OCR results use a content-addressed key and are promoted atomically before the active `ocr_pdf` asset record is committed. A crash can leave a recoverable orphan, which reconciliation reports.
 
 ## PostgreSQL queue
 
-The queue is durable and contains no in-memory source of truth. Claiming orders by `available_at`, creation time, and UUID, and uses `SELECT … FOR UPDATE SKIP LOCKED`; concurrent PostgreSQL workers cannot claim the same row. Claims record identity, timestamps, heartbeat, attempts, and an audit event.
+The queue is durable and contains no in-memory source of truth. Claiming uses the authoritative priority/aging order, creation time and UUID, then PostgreSQL advisory admission plus `FOR UPDATE SKIP LOCKED`; concurrent workers cannot claim the same row or bypass configured resource-class limits. Claims record identity, timestamps, heartbeat, attempts, and journal events.
 
 Failures retain a sanitized category/message. Attempts below the bound return to `queued` with explicit exponential delay; exhausted jobs become `failed`. On every poll, a worker reclaims active jobs whose heartbeat is older than `PDI_WORKER_JOB_TIMEOUT`. Extraction is idempotent at the database boundary because `document_extractions.document_id` is unique and retries update that record rather than append duplicates.
 

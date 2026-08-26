@@ -86,6 +86,7 @@ async def process_message(
                     path,
                     max_size=settings.max_upload_size,
                     max_attempts=settings.worker_max_attempts,
+                    timeout_seconds=settings.worker_job_timeout,
                     source="mail",
                     enqueue=True,
                     deduplicate=True,

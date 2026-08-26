@@ -1,9 +1,12 @@
 import ast
+import re
 from collections import defaultdict
 from pathlib import Path
 
+from pdi.core.config import EXECUTION_RESOURCE_LIMIT_NAMES
 from pdi.core.models import Base
 from pdi.documents.models import Document
+from pdi.execution.specification import ResourceClass
 
 PACKAGE_ROOT = Path(__file__).parents[1] / "pdi"
 
@@ -111,3 +114,33 @@ def test_shared_registry_owns_all_domain_tables() -> None:
         "search_documents",
         "local_users",
     } <= set(Base.metadata.tables)
+
+
+def test_execution_boundary_keeps_domain_and_executor_decoupled() -> None:
+    for package in ("documents", "intelligence", "knowledge", "search"):
+        for path in (PACKAGE_ROOT / package).glob("*.py"):
+            assert "pdi.execution.executor" not in runtime_imports(path), path
+            assert "pdi.ingestion.worker" not in runtime_imports(path), path
+    executor_imports = runtime_imports(PACKAGE_ROOT / "execution" / "executor.py")
+    assert not any(imported.startswith("pdi.documents") for imported in executor_imports)
+
+
+def test_task_specification_has_no_backend_internals_or_compute_core_dependency() -> None:
+    specification = (PACKAGE_ROOT / "execution" / "specification.py").read_text(encoding="utf-8")
+    for forbidden in ("worker_id", "process_id", "thread_count", "docker", "compute_core"):
+        assert forbidden not in specification.casefold()
+    project = (PACKAGE_ROOT.parent / "pyproject.toml").read_text(encoding="utf-8")
+    assert "compute-core" not in project.casefold()
+    assert "compute_core" not in project.casefold()
+
+
+def test_job_state_mutations_are_centralized_in_queue_policy() -> None:
+    mutation_files = []
+    for path in PACKAGE_ROOT.rglob("*.py"):
+        if re.search(r"\bjob\.state\s*=(?!=)", path.read_text(encoding="utf-8")):
+            mutation_files.append(path.relative_to(PACKAGE_ROOT).as_posix())
+    assert mutation_files == ["ingestion/queue.py"]
+
+
+def test_execution_resource_config_and_domain_vocabulary_cannot_drift() -> None:
+    assert {item.value for item in ResourceClass} == EXECUTION_RESOURCE_LIMIT_NAMES

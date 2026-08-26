@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from pdi.documents.models import LifeArea
 from pdi.documents.schemas import DocumentRead
+from pdi.execution.specification import FailureClass, ResourceClass, TaskPriority, TaskType
 from pdi.ingestion.models import (
     DocumentAssetKind,
     ExtractionComparisonStatus,
@@ -22,13 +23,38 @@ class IngestionJobRead(BaseModel):
     document_id: UUID
     state: IngestionJobState
     stage: str
+    task_type: TaskType
+    priority: TaskPriority
+    resource_class: ResourceClass
     attempt_count: int
     max_attempts: int
+    timeout_seconds: int
+    dependency_job_id: UUID | None
     available_at: datetime
     started_at: datetime | None
     finished_at: datetime | None
+    cancel_requested_at: datetime | None
+    cancelled_at: datetime | None
+    failure_class: FailureClass | None
+    admission_deferrals: int
     last_error_category: str | None
     last_error: str | None
+
+
+class IngestionJobEventRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    job_id: UUID
+    event_type: str
+    from_state: str
+    to_state: str
+    stage: str
+    attempt: int
+    detail: str | None
+    duration_ms: float | None
+    event_metadata: dict[str, Any]
+    created_at: datetime
 
 
 class ExtractionRead(BaseModel):

@@ -54,6 +54,7 @@ async def create_document(
     file: UploadFile,
     max_size: int,
     max_attempts: int,
+    timeout_seconds: int = 300,
 ) -> tuple[Document, bool]:
     filename, mime_type = await validate_upload(file)
     storage_key = f"{uuid.uuid4()}{EXTENSIONS[mime_type]}"
@@ -75,6 +76,7 @@ async def create_document(
             filename=filename,
             mime_type=mime_type,
             max_attempts=max_attempts,
+            timeout_seconds=timeout_seconds,
             source="upload",
             enqueue=True,
         ),
@@ -92,6 +94,7 @@ async def persist_stored_document(
     filename: str,
     mime_type: str,
     max_attempts: int,
+    timeout_seconds: int = 300,
     source: str,
     enqueue: bool,
     document_date: date | None = None,
@@ -126,7 +129,7 @@ async def persist_stored_document(
     try:
         session.add(document)
         if enqueue:
-            await enqueue_document(session, document, max_attempts)
+            await enqueue_document(session, document, max_attempts, timeout_seconds=timeout_seconds)
         else:
             document.status = DocumentStatus.READY
         await refresh_search_index(session, document)
@@ -161,6 +164,7 @@ async def ingest_path(
     *,
     max_size: int,
     max_attempts: int,
+    timeout_seconds: int = 300,
     source: str,
     enqueue: bool = True,
     deduplicate: bool = True,
@@ -189,6 +193,7 @@ async def ingest_path(
             filename=safe_filename(path.name),
             mime_type=mime_type,
             max_attempts=max_attempts,
+            timeout_seconds=timeout_seconds,
             source=source,
             enqueue=enqueue,
             document_date=document_date,

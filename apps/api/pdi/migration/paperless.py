@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pdi.core.config import Settings
 from pdi.documents.models import Document
 from pdi.documents.service import ingest_path
+from pdi.execution.specification import TaskPriority
 from pdi.ingestion.extraction import normalize_text
 from pdi.ingestion.models import (
     DocumentAsset,
@@ -690,6 +691,7 @@ async def import_documents(
                     path,
                     max_size=settings.max_upload_size,
                     max_attempts=settings.worker_max_attempts,
+                    timeout_seconds=settings.worker_job_timeout,
                     source="paperless_ngx",
                     enqueue=False,
                     deduplicate=True,
@@ -771,7 +773,13 @@ async def import_documents(
                                 provider_version="1",
                             )
                         )
-                    await enqueue_document(session, document, settings.worker_max_attempts)
+                    await enqueue_document(
+                        session,
+                        document,
+                        settings.worker_max_attempts,
+                        priority=TaskPriority.BULK,
+                        timeout_seconds=settings.worker_job_timeout,
+                    )
                 canonical_extraction = await canonical_extraction_for(session, document.id)
                 await refresh_search_index(session, document, canonical_extraction)
                 item.status = (
