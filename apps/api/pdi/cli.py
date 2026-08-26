@@ -11,6 +11,7 @@ from pathlib import Path
 
 from sqlalchemy import func, select
 
+from pdi.auth.bootstrap import bootstrap_first_admin, setup_required
 from pdi.auth.service import ALL_SCOPES, READ_SCOPES, audit_event, create_api_token, create_user
 from pdi.core.config import get_settings
 from pdi.core.database import session_factory
@@ -122,15 +123,24 @@ def password_from(arguments: argparse.Namespace) -> str:
 async def run_user(arguments: argparse.Namespace) -> None:
     async with session_factory() as session:
         if arguments.user_command == "create":
-            user = await create_user(session, arguments.username, password_from(arguments))
-            audit_event(
-                session,
-                "user_created",
-                actor_user_id=None,
-                target_user_id=user.id,
-                detail={"source": "operator_cli", "role": user.role.value},
-            )
-            await session.commit()
+            password = password_from(arguments)
+            if await setup_required(session):
+                await bootstrap_first_admin(
+                    session,
+                    username=arguments.username,
+                    password=password,
+                    source="operator_cli",
+                )
+            else:
+                user = await create_user(session, arguments.username, password)
+                audit_event(
+                    session,
+                    "user_created",
+                    actor_user_id=None,
+                    target_user_id=user.id,
+                    detail={"source": "operator_cli", "role": user.role.value},
+                )
+                await session.commit()
             output({"created": True})
         else:
             active_user = await session.scalar(

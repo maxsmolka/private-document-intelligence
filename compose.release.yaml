@@ -18,6 +18,7 @@ x-backend-environment: &backend-environment
   PDI_OCR_MAX_DERIVED_SIZE: 104857600
   PDI_INTELLIGENCE_PROVIDER: deterministic
   PDI_AUTH_ENABLED: "true"
+  PDI_SETUP_ENABLED: ${PDI_SETUP_ENABLED:-true}
   PDI_AUTH_SECURE_COOKIES: ${PDI_AUTH_SECURE_COOKIES:-true}
 
 services:
@@ -37,7 +38,7 @@ services:
     restart: unless-stopped
 
   api:
-    image: ghcr.io/maxsmolka/private-document-intelligence/backend:${PDI_VERSION:-1.1.0}
+    image: ghcr.io/maxsmolka/private-document-intelligence/backend:${PDI_VERSION:-1.1.2}
     environment:
       <<: *backend-environment
       PDI_CORS_ORIGINS: '["${PDI_PUBLIC_URL:?set in .env.release}"]'
@@ -58,7 +59,7 @@ services:
     restart: unless-stopped
 
   worker:
-    image: ghcr.io/maxsmolka/private-document-intelligence/backend:${PDI_VERSION:-1.1.0}
+    image: ghcr.io/maxsmolka/private-document-intelligence/backend:${PDI_VERSION:-1.1.2}
     command: ["pdi-worker"]
     environment:
       <<: *backend-environment
@@ -80,7 +81,7 @@ services:
     restart: unless-stopped
 
   web:
-    image: ghcr.io/maxsmolka/private-document-intelligence/web:${PDI_VERSION:-1.1.0}
+    image: ghcr.io/maxsmolka/private-document-intelligence/web:${PDI_VERSION:-1.1.2}
     environment:
       PDI_API_INTERNAL_URL: http://api:8000
       PDI_AUTH_ENABLED: "true"

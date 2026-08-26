@@ -5,7 +5,9 @@ export const runtime = "nodejs";
 
 type RouteContext = { params: Promise<{ path: string[] }> };
 
-const REQUEST_HEADERS = ["accept", "content-type", "range", "if-range", "x-csrf-token"];
+const REQUEST_HEADERS = [
+  "accept", "content-type", "range", "if-range", "origin", "referer", "x-csrf-token",
+];
 const RESPONSE_HEADERS = [
   "accept-ranges",
   "cache-control",

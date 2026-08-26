@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5:7b"
     auth_enabled: bool = False
+    setup_enabled: bool = True
     session_ttl_seconds: int = Field(default=43_200, ge=300, le=2_592_000)
     auth_secure_cookies: bool = False
     login_max_attempts: int = Field(default=5, ge=1, le=50)

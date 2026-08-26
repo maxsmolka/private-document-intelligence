@@ -28,6 +28,7 @@ PDI has local authentication but is still intended for a private network or VPN,
 - admin/user/read-only authorization, immediate session/token revocation, and last-active-admin protection
 - secret-free security audit events for authentication and account-administration actions
 - SameSite browser cookies, HttpOnly session storage, and CSRF validation for unsafe requests
+- zero-user-only first-admin setup with PostgreSQL serialization, strict allowed-origin validation, and permanent database-derived disablement
 - read-only secret files for IMAP and Paperless; no secret values in manifests, logs, exports, or Compose
 - checksummed backup inventories, path containment, corruption refusal, and non-empty restore refusal
 
@@ -56,3 +57,5 @@ Backup verification proves manifest/dump consistency, not benevolent content: re
 Security headers include CSP, frame denial, MIME sniffing denial, referrer and permissions policies. HSTS belongs at the HTTPS reverse proxy so local HTTP development is not broken.
 
 Report vulnerabilities privately to maintainers without attaching sensitive documents to public issues.
+
+The browser bootstrap threat model and residual fresh-host claim risk are documented in [FIRST_RUN_SETUP.md](FIRST_RUN_SETUP.md).

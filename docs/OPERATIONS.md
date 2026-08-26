@@ -4,6 +4,17 @@ For upgrades, use the sequence **backup → verify backup → pull explicitly ve
 
 Before upgrading to v1.1.0, add a protected `PDI_TOTP_ENCRYPTION_KEY` containing 32 random bytes in base64 form to `.env.release`. Keep that value with encrypted deployment-secret backups; losing or changing it makes enabled TOTP secrets unreadable. The key is passed only to the API service.
 
+## Fresh installation
+
+1. Copy `.env.release.example` to `.env.release` and replace every placeholder.
+2. Generate and protect the database password and TOTP encryption key.
+3. Start `compose.release.yaml` with the protected environment file.
+4. Open the configured HTTPS URL; the zero-user installation redirects to `/setup`.
+5. Create the first administrator and optionally enroll an authenticator.
+6. Save any recovery codes once, then run `pdi readiness`.
+
+The CLI `pdi user create admin` remains the headless alternative. Operators exposing a fresh host before browser setup should set `PDI_SETUP_ENABLED=false` and use the CLI. See [FIRST_RUN_SETUP.md](FIRST_RUN_SETUP.md).
+
 ## Routine commands
 
 ```bash
