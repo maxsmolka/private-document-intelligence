@@ -48,6 +48,7 @@ services:
     environment:
       <<: *backend-environment
       PDI_CORS_ORIGINS: '["http://localhost:3000"]'
+      PDI_TOTP_ENCRYPTION_KEY: ${PDI_TOTP_ENCRYPTION_KEY:-MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=}
     volumes:
       - document_storage:/data/documents
       - backup_data:/backups

@@ -23,8 +23,9 @@ COPY tests ./tests
 CMD ["uv", "run", "pytest"]
 
 FROM python:3.13-slim-trixie AS runtime
-ARG PDI_VERSION=1.0.2
+ARG PDI_VERSION=1.1.0
 ARG PDI_REVISION=unknown
+ARG PDI_BUILD_TIME=unknown
 ARG PDI_SOURCE=https://github.com/maxsmolka/private-document-intelligence
 LABEL org.opencontainers.image.title="PDI backend" \
       org.opencontainers.image.description="Private Document Intelligence API, worker, and OCR runtime" \
@@ -32,7 +33,8 @@ LABEL org.opencontainers.image.title="PDI backend" \
       org.opencontainers.image.revision=$PDI_REVISION \
       org.opencontainers.image.source=$PDI_SOURCE \
       org.opencontainers.image.licenses="MIT"
-ENV PATH="/opt/venv/bin:$PATH" PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+ENV PATH="/opt/venv/bin:$PATH" PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
+    PDI_BUILD_REVISION=$PDI_REVISION PDI_BUILD_TIME=$PDI_BUILD_TIME PDI_DEPLOYMENT_TYPE=container
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
         ocrmypdf \

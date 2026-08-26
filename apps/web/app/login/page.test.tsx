@@ -54,4 +54,25 @@ describe("LoginForm post-login redirect", () => {
     const navigate = await submitSuccessfulLogin("//evil.example");
     expect(navigate).toHaveBeenCalledWith("/");
   });
+
+  it("completes a two-factor challenge without losing the first factor", async () => {
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, status: 202 })
+      .mockResolvedValueOnce({ ok: true, status: 200 });
+    const navigate = vi.fn();
+    render(<LoginForm navigate={navigate} />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Username" }), { target: { value: "pilot" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "correct horse battery staple" } });
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    const code = await screen.findByLabelText("Authenticator code");
+    fireEvent.change(code, { target: { value: "123456" } });
+    fireEvent.click(screen.getByRole("button", { name: "Verify and sign in" }));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/"));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/pdi/api/v1/auth/login",
+      expect.objectContaining({
+        body: JSON.stringify({ username: "pilot", password: "correct horse battery staple", totp: "123456" }),
+      }),
+    );
+  });
 });

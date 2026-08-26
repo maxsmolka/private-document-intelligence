@@ -17,6 +17,12 @@ describe("activeNavigationRoute", () => {
     ["contract detail", "/contracts/6eb3d86a", "/contracts"],
     ["timeline", "/timeline", "/timeline"],
     ["upcoming", "/upcoming", "/upcoming"],
+    ["account settings", "/settings/account", "/settings/account"],
+    ["security settings", "/settings/security", "/settings/security"],
+    ["session settings", "/settings/sessions", "/settings/sessions"],
+    ["token settings", "/settings/tokens", "/settings/tokens"],
+    ["about settings", "/settings/about", "/settings/about"],
+    ["user administration", "/admin/users", "/admin/users"],
   ])("owns the %s route", (_label, pathname, expected) => {
     expect(activeNavigationRoute(pathname)).toBe(expected);
   });

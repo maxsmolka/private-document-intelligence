@@ -24,6 +24,9 @@ PDI has local authentication but is still intended for a private network or VPN,
 - search uses bound parameters, human-safe `websearch_to_tsquery`, a 200-character query cap, and bounded result/snippet sizes
 - highlight ranges describe exact persisted strings; the API never emits generated search HTML
 - Argon2id passwords, rate-limited login, digest-only revocable sessions and API tokens
+- opt-in standards-compatible TOTP with AES-256-GCM encrypted secrets and one-time Argon2id-hashed recovery codes
+- admin/user/read-only authorization, immediate session/token revocation, and last-active-admin protection
+- secret-free security audit events for authentication and account-administration actions
 - SameSite browser cookies, HttpOnly session storage, and CSRF validation for unsafe requests
 - read-only secret files for IMAP and Paperless; no secret values in manifests, logs, exports, or Compose
 - checksummed backup inventories, path containment, corruption refusal, and non-empty restore refusal
@@ -34,7 +37,7 @@ PyPDF runs inside the bounded worker job but is still a parser for untrusted inp
 
 OCRmyPDF, Ghostscript, qpdf, image codecs, and Tesseract parse hostile native formats. PDI bounds time, pages, image dimensions, output size, attempts, and concurrency, but does not provide a perfect native-code sandbox or hard memory/disk quota. Keep the image patched and apply container CPU/memory/PID limits appropriate to the host. A decompression bomb may consume resources before every application limit can intervene; temporary disk exhaustion and kernel OOM termination remain residual risks. Never construct subprocess arguments from original filenames, use `shell=True`, or expose arbitrary OCR flags through document metadata.
 
-PDI does not currently provide antivirus scanning, PDF sanitization, per-user quotas, application-layer encryption, sandbox namespaces, SSO, MFA, or per-document RBAC. Browser PDF viewers also process untrusted input and must remain patched.
+PDI does not currently provide antivirus scanning, PDF sanitization, per-user quotas, general document encryption, sandbox namespaces, SSO, WebAuthn, or per-document RBAC. Browser PDF viewers also process untrusted input and must remain patched. See [account security](ACCOUNT_SECURITY.md) for the TOTP key model and residual account risks.
 
 ## Data and provider privacy
 

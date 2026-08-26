@@ -2,6 +2,9 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from pdi.api.health import router as health_router
+from pdi.api.system import router as system_router
+from pdi.auth.account import router as account_router
+from pdi.auth.admin import router as admin_router
 from pdi.auth.router import require_auth
 from pdi.auth.router import router as auth_router
 from pdi.core.config import get_settings
@@ -37,6 +40,9 @@ def create_app() -> FastAPI:
     application.include_router(search_router, dependencies=protected)
     application.include_router(knowledge_router, dependencies=protected)
     application.include_router(operations_router, dependencies=protected)
+    application.include_router(account_router, dependencies=protected)
+    application.include_router(admin_router, dependencies=protected)
+    application.include_router(system_router, dependencies=protected)
     return application
 
 
