@@ -73,6 +73,7 @@ async def auth_client(
         max_upload_size=1024,
         auth_enabled=True,
         auth_secure_cookies=False,
+        totp_encryption_key="MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=",
     )
     storage = LocalStorageBackend(settings.storage_path)
 

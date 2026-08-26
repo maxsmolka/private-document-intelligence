@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, CalendarClock, Clock3, FileCheck2, FileSearch, FileText, LayoutDashboard, Lightbulb, ScrollText, X } from "lucide-react";
+import { Building2, CalendarClock, Clock3, FileCheck2, FileSearch, FileText, Info, KeyRound, LayoutDashboard, Lightbulb, MonitorSmartphone, ScrollText, Settings, ShieldCheck, Users, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { activeNavigationRoute } from "@/lib/navigation";
@@ -19,6 +19,14 @@ const groups = [
     { label: "Timeline", icon: Clock3, href: "/timeline" },
     { label: "Upcoming", icon: CalendarClock, href: "/upcoming" },
   ] },
+  { label: "Settings", items: [
+    { label: "Account", icon: Settings, href: "/settings/account" },
+    { label: "Security", icon: ShieldCheck, href: "/settings/security" },
+    { label: "Sessions", icon: MonitorSmartphone, href: "/settings/sessions" },
+    { label: "API Tokens", icon: KeyRound, href: "/settings/tokens" },
+    { label: "About", icon: Info, href: "/settings/about" },
+    { label: "Users", icon: Users, href: "/admin/users" },
+  ] },
 ];
 
 export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -27,7 +35,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
   return (
     <>
       {open ? <button type="button" aria-label="Close navigation" onClick={onClose} className="fixed inset-0 z-40 bg-stone-950/30 backdrop-blur-[2px] md:hidden" /> : null}
-      <aside className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-stone-200 bg-[#f1f1ee] px-3 py-4 transition-transform duration-200 md:translate-x-0 ${open ? "translate-x-0" : "-translate-x-full"}`}>
+      <aside className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col overflow-y-auto border-r border-stone-200 bg-[#f1f1ee] px-3 py-4 transition-transform duration-200 md:translate-x-0 ${open ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="flex items-center">
           <Link href="/" onClick={onClose} className="flex min-w-0 items-center gap-3 px-2 text-stone-900">
             <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#274c3b] text-sm font-semibold text-white shadow-sm">P</span>

@@ -1,4 +1,10 @@
 export const navigationRouteOwners = [
+  "/settings/security",
+  "/settings/sessions",
+  "/settings/account",
+  "/settings/tokens",
+  "/settings/about",
+  "/admin/users",
   "/review/knowledge",
   "/organizations",
   "/documents",

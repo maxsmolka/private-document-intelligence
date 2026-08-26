@@ -27,6 +27,12 @@ describe("Sidebar active navigation", () => {
     ["/contracts/contract-id", "Contracts"],
     ["/timeline", "Timeline"],
     ["/upcoming", "Upcoming"],
+    ["/settings/account", "Account"],
+    ["/settings/security", "Security"],
+    ["/settings/sessions", "Sessions"],
+    ["/settings/tokens", "API Tokens"],
+    ["/settings/about", "About"],
+    ["/admin/users", "Users"],
   ])("marks only the owner of %s active", (route, label) => {
     routeState.pathname = route;
     const { container } = render(<Sidebar open onClose={() => undefined} />);

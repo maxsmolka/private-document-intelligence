@@ -34,6 +34,9 @@ async function forward(request: NextRequest, context: RouteContext) {
     const value = request.headers.get(name);
     if (value) headers.set(name, value);
   }
+  headers.set("x-pdi-web-version", process.env.PDI_WEB_VERSION ?? "unknown");
+  headers.set("x-pdi-web-revision", process.env.PDI_WEB_REVISION ?? "unknown");
+  headers.set("x-pdi-web-build-time", process.env.PDI_WEB_BUILD_TIME ?? "unknown");
 
   const hasBody = request.method !== "GET" && request.method !== "HEAD";
   const upstream = await fetch(upstreamUrl, {

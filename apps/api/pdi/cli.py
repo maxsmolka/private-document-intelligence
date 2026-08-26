@@ -9,9 +9,9 @@ from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
-from pdi.auth.service import ALL_SCOPES, READ_SCOPES, create_api_token, create_user
+from pdi.auth.service import ALL_SCOPES, READ_SCOPES, audit_event, create_api_token, create_user
 from pdi.core.config import get_settings
 from pdi.core.database import session_factory
 from pdi.migration.paperless import (
@@ -25,7 +25,7 @@ from pdi.migration.paperless import (
 )
 from pdi.operations.backup import create_backup, restore_backup, verify_backup
 from pdi.operations.export import create_export
-from pdi.operations.models import ApiToken, LocalUser
+from pdi.operations.models import ApiToken, LocalUser, UserRole
 from pdi.operations.readiness import readiness
 from pdi.search.service import rebuild_search_index, verify_search_index
 from pdi.storage.dependencies import get_storage
@@ -122,7 +122,15 @@ def password_from(arguments: argparse.Namespace) -> str:
 async def run_user(arguments: argparse.Namespace) -> None:
     async with session_factory() as session:
         if arguments.user_command == "create":
-            await create_user(session, arguments.username, password_from(arguments))
+            user = await create_user(session, arguments.username, password_from(arguments))
+            audit_event(
+                session,
+                "user_created",
+                actor_user_id=None,
+                target_user_id=user.id,
+                detail={"source": "operator_cli", "role": user.role.value},
+            )
+            await session.commit()
             output({"created": True})
         else:
             active_user = await session.scalar(
@@ -130,7 +138,21 @@ async def run_user(arguments: argparse.Namespace) -> None:
             )
             if active_user is None:
                 raise ValueError("User not found")
+            active_admins = await session.scalar(
+                select(func.count())
+                .select_from(LocalUser)
+                .where(LocalUser.role == UserRole.ADMIN, LocalUser.is_active.is_(True))
+            )
+            if active_user.role == UserRole.ADMIN and int(active_admins or 0) <= 1:
+                raise ValueError("The last active administrator cannot be disabled")
             active_user.is_active = False
+            audit_event(
+                session,
+                "user_deactivated",
+                actor_user_id=None,
+                target_user_id=active_user.id,
+                detail={"source": "operator_cli"},
+            )
             await session.commit()
             output({"username": active_user.username, "disabled": True})
 
@@ -165,6 +187,13 @@ async def run_token(arguments: argparse.Namespace) -> None:
             if stored_token is None:
                 raise ValueError("Token not found")
             stored_token.revoked_at = datetime.now(UTC)
+            audit_event(
+                session,
+                "api_token_revoked",
+                actor_user_id=None,
+                target_user_id=stored_token.user_id,
+                detail={"source": "operator_cli", "token_id": str(stored_token.id)},
+            )
             await session.commit()
             output({"id": str(stored_token.id), "revoked": True})
 

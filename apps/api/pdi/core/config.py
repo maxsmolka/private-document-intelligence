@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     auth_secure_cookies: bool = False
     login_max_attempts: int = Field(default=5, ge=1, le=50)
     login_window_seconds: int = Field(default=900, ge=60, le=86_400)
+    totp_encryption_key: SecretStr | None = None
+    build_revision: str = "unknown"
+    build_time: str = "unknown"
+    deployment_type: str = "unknown"
     consume_path: Path = Path("./consume")
     consume_processed_path: Path = Path("./consume-processed")
     consume_failed_path: Path = Path("./consume-failed")

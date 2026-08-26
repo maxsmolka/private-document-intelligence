@@ -2,6 +2,26 @@
 
 All notable changes are documented here. PDI follows Semantic Versioning.
 
+## [1.1.0] - 2026-08-26
+
+### Added
+
+- Add opt-in standards-compatible TOTP authentication with locally generated QR setup, encrypted secrets, verification before activation, and one-time Argon2id-hashed recovery codes.
+- Add authenticated account pages for password changes, active-session revocation, and one-time-display scoped API-token creation and revocation.
+- Add minimal Admin, User, and Read-only roles with user lifecycle controls and last-active-admin protection.
+- Add security audit events for authentication, recovery, credential, session, token, and administrator actions without storing credential material.
+- Add an authenticated About/System Information API and UI showing component versions, immutable build metadata, database revision, runtime, OCR, and intelligence provider details with backend/web mismatch warnings.
+
+### Operations
+
+- Add the forward-only `20260826_0012` account-security migration; existing v1.0.2 users become administrators while existing sessions and API tokens remain valid.
+- Require an operator-managed 32-byte base64 TOTP encryption key for production API deployments. The worker does not receive this key.
+- Preserve the existing backup/storage formats and document/search indexes; no reindex is required.
+
+### Security
+
+- Ship the TOTP encryption implementation on cryptography 50.0.1; the locked Python runtime and web dependency trees pass current advisory audits.
+
 ## [1.0.2] - 2026-08-25
 
 ### Fixed
@@ -48,6 +68,7 @@ All notable changes are documented here. PDI follows Semantic Versioning.
 
 - Local Argon2id accounts, revocable sessions and API tokens, CSRF protection, upload validation, bounded OCR, non-root containers, and privacy-safe logging.
 
+[1.1.0]: https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.1.0
 [1.0.2]: https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.0.2
 [1.0.1]: https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.0.1
 [1.0.0]: https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.0.0
