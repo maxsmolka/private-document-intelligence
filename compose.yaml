@@ -119,11 +119,14 @@ services:
     environment:
       <<: *backend-environment
       PDI_CONSUME_PATH: /consume
+      PDI_CONSUME_PROCESSING_PATH: /consume-processing
       PDI_CONSUME_PROCESSED_PATH: /consume-processed
       PDI_CONSUME_FAILED_PATH: /consume-failed
+      PDI_CONSUME_ENABLED: "true"
     volumes:
       - document_storage:/data/documents
       - consume_inbox:/consume
+      - consume_processing:/consume-processing
       - consume_processed:/consume-processed
       - consume_failed:/consume-failed
     depends_on:
@@ -159,5 +162,6 @@ volumes:
   document_storage:
   backup_data:
   consume_inbox:
+  consume_processing:
   consume_processed:
   consume_failed:

@@ -60,6 +60,7 @@ class Settings(BaseSettings):
     build_time: str = "unknown"
     deployment_type: str = "unknown"
     consume_path: Path = Path("./consume")
+    consume_processing_path: Path = Path("./consume-processing")
     consume_processed_path: Path = Path("./consume-processed")
     consume_failed_path: Path = Path("./consume-failed")
     consume_stability_seconds: int = Field(default=10, ge=1, le=3600)

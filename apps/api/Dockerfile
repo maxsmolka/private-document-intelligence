@@ -45,8 +45,8 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system --gid 10001 pdi \
     && useradd --system --uid 10001 --gid pdi --home-dir /app pdi \
-    && mkdir -p /data/documents /app /consume /consume-processed /consume-failed /backups \
-    && chown -R pdi:pdi /data /app /backups /consume /consume-processed /consume-failed
+    && mkdir -p /data/documents /app /consume /consume-processing /consume-processed /consume-failed /backups \
+    && chown -R pdi:pdi /data /app /backups /consume /consume-processing /consume-processed /consume-failed
 WORKDIR /app
 COPY --from=builder /opt/venv /opt/venv
 COPY --from=builder --chown=pdi:pdi /app/pdi ./pdi
