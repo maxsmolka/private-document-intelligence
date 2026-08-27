@@ -775,4 +775,4 @@ async def test_startup_recovery_preserves_live_executor_and_recovers_expired_lea
         await session.commit()
         recovered = await recover_unfinished_updates(session)
         assert recovered == [run]
-        assert run.state == UpdateState.ROLLBACK_REQUIRED
+        assert recovered[0].state == UpdateState.ROLLBACK_REQUIRED
