@@ -6,7 +6,9 @@ from typing import Any
 DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 COMMIT = re.compile(r"^[0-9a-f]{40}$")
 SCHEMA = re.compile(r"^[0-9]{8}_[0-9]{4}$")
-VERSION = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
+VERSION = re.compile(
+    r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-rc\.([1-9][0-9]*))?$"
+)
 ARCHITECTURES = frozenset({"linux/amd64", "linux/arm64"})
 
 
@@ -44,13 +46,17 @@ class ReleaseManifest:
         }
 
 
-def version_tuple(value: str) -> tuple[int, int, int]:
-    if not VERSION.fullmatch(value):
+def version_tuple(value: str) -> tuple[int, int, int, int, int]:
+    matched = VERSION.fullmatch(value)
+    if not matched:
         raise ValueError("Release version is not strict semantic version")
-    return tuple(int(part) for part in value.split("."))  # type: ignore[return-value]
+    major, minor, patch, candidate = matched.groups()
+    return int(major), int(minor), int(patch), 0 if candidate else 1, int(candidate or 0)
 
 
-def validate_manifest(raw: object, *, release_version: str | None = None) -> ReleaseManifest:
+def validate_manifest(
+    raw: object, *, release_version: str | None = None, allow_prerelease: bool = False
+) -> ReleaseManifest:
     if not isinstance(raw, dict):
         raise ValueError("Release manifest must be an object")
     required = {
@@ -72,6 +78,8 @@ def validate_manifest(raw: object, *, release_version: str | None = None) -> Rel
         raise ValueError("Release manifest fields do not match the supported schema")
     version = str(raw["version"])
     version_tuple(version)
+    if "-" in version and not allow_prerelease:
+        raise ValueError("Prerelease manifests are disabled")
     version_tuple(str(raw["minimum_supported_version"]))
     if release_version and version != release_version:
         raise ValueError("Release version does not match manifest")

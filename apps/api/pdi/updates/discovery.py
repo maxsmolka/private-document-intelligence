@@ -78,9 +78,13 @@ async def discover_release(
         raise ReleaseDiscoveryError("Official release metadata could not be read") from exc
     if not isinstance(payload, list):
         raise ReleaseDiscoveryError("Official release response is malformed")
-    candidates: list[tuple[tuple[int, int, int], dict[str, Any]]] = []
+    candidates: list[tuple[tuple[int, int, int, int, int], dict[str, Any]]] = []
     for item in payload:
-        if not isinstance(item, dict) or item.get("draft") or item.get("prerelease"):
+        if (
+            not isinstance(item, dict)
+            or item.get("draft")
+            or (item.get("prerelease") and not settings.update_allow_prerelease)
+        ):
             continue
         version = _release_version(item.get("tag_name"))
         html_url = str(item.get("html_url", ""))
@@ -114,7 +118,11 @@ async def discover_release(
         except (OSError, TimeoutError) as exc:
             raise ReleaseDiscoveryError("Official release manifest could not be read") from exc
         try:
-            manifest = validate_manifest(raw_manifest, release_version=version)
+            manifest = validate_manifest(
+                raw_manifest,
+                release_version=version,
+                allow_prerelease=settings.update_allow_prerelease,
+            )
         except ValueError as exc:
             raise ReleaseDiscoveryError(str(exc)) from exc
         return DiscoveredRelease(

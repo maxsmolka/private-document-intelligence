@@ -74,8 +74,12 @@ async def current_update(session: AsyncSession) -> UpdateRun | None:
     return run
 
 
-def manifest_from_cache(release: CachedRelease) -> ReleaseManifest:
-    return validate_manifest(release.manifest, release_version=release.version)
+def manifest_from_cache(release: CachedRelease, settings: Settings) -> ReleaseManifest:
+    return validate_manifest(
+        release.manifest,
+        release_version=release.version,
+        allow_prerelease=settings.update_allow_prerelease,
+    )
 
 
 def compatibility(manifest: ReleaseManifest, current_schema: str | None) -> tuple[str, list[str]]:
@@ -114,7 +118,7 @@ async def create_plan(
 ) -> UpdateRun:
     if await current_update(session):
         raise ValueError("Another update is already active")
-    manifest = manifest_from_cache(release)
+    manifest = manifest_from_cache(release, settings)
     current_schema = await database_revision(session)
     result, warnings = compatibility(manifest, current_schema)
     previous_run = await session.scalar(

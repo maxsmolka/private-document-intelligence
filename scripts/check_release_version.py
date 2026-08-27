@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import tomllib
 from pathlib import Path
 
@@ -23,7 +24,9 @@ def main() -> None:
     values = {"VERSION": canonical, "API": api, "web": web}
     if len(set(values.values())) != 1:
         raise SystemExit(f"Version mismatch: {values}")
-    if args.tag and args.tag != f"v{canonical}":
+    allowed_tags = {f"v{canonical}"}
+    candidate = re.fullmatch(rf"v{re.escape(canonical)}-rc\.[1-9][0-9]*", args.tag or "")
+    if args.tag and args.tag not in allowed_tags and not candidate:
         raise SystemExit(f"Tag {args.tag!r} does not match v{canonical}")
     print(f"Release version validated: {canonical}")
 

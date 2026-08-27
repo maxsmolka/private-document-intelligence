@@ -76,6 +76,7 @@ class Settings(BaseSettings):
     paperless_verify_tls: bool = True
     backup_path: Path = Path("./backups")
     update_channel: Literal["disabled", "manual", "weekly"] = "manual"
+    update_allow_prerelease: bool = False
     update_github_api_url: str = (
         "https://api.github.com/repos/maxsmolka/private-document-intelligence/releases"
     )

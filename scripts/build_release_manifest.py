@@ -17,11 +17,16 @@ POLICY_FIELDS = {
 
 def strict_version(value: str) -> str:
     normalized = value.removeprefix("v")
-    parts = normalized.split(".")
+    core, separator, candidate = normalized.partition("-rc.")
+    parts = core.split(".")
     if len(parts) != 3 or any(
         not part.isdigit() or (len(part) > 1 and part[0] == "0") for part in parts
     ):
-        raise ValueError("Version must be strict semver without prerelease metadata")
+        raise ValueError("Version must be strict semantic version")
+    if separator and (not candidate.isdigit() or candidate.startswith("0")):
+        raise ValueError("Only numbered rc prereleases are supported")
+    if not separator and "-" in normalized:
+        raise ValueError("Only numbered rc prereleases are supported")
     return normalized
 
 

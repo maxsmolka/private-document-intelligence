@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": ["version", "release_commit", "backend_digest", "web_digest", "minimum_supported_version", "minimum_schema", "target_schema", "migration_required", "reindex_required", "backup_required", "rollback_mode", "release_notes_url", "architectures"],
   "properties": {
-    "version": {"type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"},
+    "version": {"type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-rc\\.[1-9][0-9]*)?$"},
     "release_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
     "backend_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "web_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
