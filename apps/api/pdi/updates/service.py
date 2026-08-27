@@ -266,6 +266,15 @@ async def maintenance_enabled(session: AsyncSession) -> bool:
     return bool(control and control.enabled)
 
 
+def executor_lease_active(run: UpdateRun, *, now: datetime | None = None) -> bool:
+    if run.executor_lease_id is None or run.executor_lease_expires_at is None:
+        return False
+    expires_at = run.executor_lease_expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=UTC)
+    return expires_at > (now or datetime.now(UTC))
+
+
 async def prepare_update(
     session: AsyncSession,
     storage: StorageBackend,
@@ -355,6 +364,7 @@ async def recover_unfinished_updates(session: AsyncSession) -> list[UpdateRun]:
     runs = list(
         await session.scalars(select(UpdateRun).where(UpdateRun.state.in_(ACTIVE_UPDATE_STATES)))
     )
+    recovered: list[UpdateRun] = []
     release_maintenance = False
     for run in runs:
         if run.state in {UpdateState.PREFLIGHT, UpdateState.BACKUP, UpdateState.DRAINING}:
@@ -362,15 +372,19 @@ async def recover_unfinished_updates(session: AsyncSession) -> list[UpdateRun]:
             run.failure_message = "Preparation was interrupted before deployment execution"
             transition(session, run, UpdateState.FAILED, event_type="crash_recovered")
             release_maintenance = True
+            recovered.append(run)
         elif run.state not in {UpdateState.PLANNED, UpdateState.AWAITING_EXECUTION}:
+            if executor_lease_active(run):
+                continue
             run.failure_code = "EXECUTOR_INTERRUPTED"
             run.failure_message = "Inspect deployment and follow rollback guidance"
             transition(session, run, UpdateState.ROLLBACK_REQUIRED, event_type="crash_recovered")
-    if runs:
+            recovered.append(run)
+    if recovered:
         await session.commit()
     if release_maintenance:
         await set_maintenance(session, False)
-    return runs
+    return recovered
 
 
 def serialize_run(run: UpdateRun, *, include_preflight: bool = True) -> dict[str, Any]:

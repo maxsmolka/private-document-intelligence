@@ -95,6 +95,10 @@ class UpdateRun(Base):
     )
     failure_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
     failure_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    executor_lease_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
+    executor_lease_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     started_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("local_users.id", ondelete="SET NULL"), nullable=True
     )

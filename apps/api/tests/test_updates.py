@@ -1,5 +1,6 @@
 import json
-from datetime import UTC, datetime
+import uuid
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -260,6 +261,12 @@ async def test_constrained_executor_dry_run_and_successful_update(
         calls.append(arguments)
         assert limit_seconds > 0
         rendered = " ".join(arguments)
+        if "up -d --wait" in rendered:
+            async with session_factory() as startup_session:
+                assert await recover_unfinished_updates(startup_session) == []
+                persisted = await startup_session.scalar(select(UpdateRun))
+                assert persisted is not None
+                assert persisted.state == UpdateState.STARTING
         if "image inspect" in rendered and "RepoDigests" in rendered:
             return rendered
         if "image inspect" in rendered and "revision" in rendered:
@@ -315,14 +322,20 @@ async def test_constrained_executor_dry_run_and_successful_update(
         assert dry["mutated"] is False
         assert json.loads(overlay.read_text())["services"]["api"]["image"].endswith(DIGEST_A)
         completed = await executor.execute(session, Settings(env="test"), run)
-        assert completed.state == UpdateState.COMPLETED
+        assert completed.state == UpdateState.COMPLETED, (
+            completed.failure_code,
+            completed.failure_message,
+        )
         assert completed.schema_after == "20260827_0014"
+        assert completed.executor_lease_id is None
+        assert completed.executor_lease_expires_at is None
         assert json.loads(overlay.read_text())["services"]["api"]["image"].endswith(DIGEST_C)
         assert not any("latest" in argument for call in calls for argument in call)
         events = list(
             await session.scalars(select(UpdateEvent).where(UpdateEvent.update_run_id == run.id))
         )
         assert any(event.event_type == "update_completed" for event in events)
+        assert not any(event.event_type == "crash_recovered" for event in events)
 
 
 async def test_update_api_is_admin_session_and_csrf_only(
@@ -550,6 +563,8 @@ async def test_prepare_blocks_before_installation_on_backup_or_drain_failure(
         failed = await prepare_update(session, storage, settings, run)
         assert failed.state == UpdateState.FAILED
         assert failed.failure_code == failure_code
+        assert failed.executor_lease_id is None
+        assert failed.executor_lease_expires_at is None
         if failure_mode == "backup":
             assert failed.backup_id is None
         else:
@@ -674,6 +689,8 @@ async def test_executor_failure_semantics_are_stage_aware(
         assert failed.state == expected_state
         assert failed.state != UpdateState.COMPLETED
         assert failed.failure_code == failure_code
+        assert failed.executor_lease_id is None
+        assert failed.executor_lease_expires_at is None
         current_image = json.loads(overlay.read_text())["services"]["api"]["image"]
         assert current_image.endswith(
             DIGEST_A if expected_state == UpdateState.FAILED else DIGEST_C
@@ -717,3 +734,45 @@ async def test_crash_recovery_does_not_replay_destructive_steps_and_redacts_secr
         event = await session.scalar(select(UpdateEvent).where(UpdateEvent.update_run_id == run.id))
         assert event is not None
         assert "password" not in (event.safe_detail or "").casefold()
+
+
+async def test_startup_recovery_preserves_live_executor_and_recovers_expired_lease(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with session_factory() as session:
+        run = UpdateRun(
+            state=UpdateState.STARTING,
+            active_guard=True,
+            from_version="1.3.0",
+            to_version=VERSION,
+            release_commit=COMMIT,
+            schema_before="20260826_0013",
+            schema_target="20260827_0014",
+            target_backend_digest=DIGEST_C,
+            target_web_digest=DIGEST_D,
+            migration_required=True,
+            reindex_required=False,
+            backup_required=True,
+            rollback_mode="restore_backup",
+            expected_downtime="short",
+            architecture="linux/amd64",
+            compatibility="compatible",
+            warnings=[],
+            preflight={},
+            executor_lease_id=uuid.uuid4(),
+            executor_lease_expires_at=datetime.now(UTC) + timedelta(minutes=5),
+        )
+        session.add(run)
+        await session.commit()
+        assert await recover_unfinished_updates(session) == []
+        await session.refresh(run)
+        assert run.state == UpdateState.STARTING
+        assert not await session.scalar(
+            select(UpdateEvent).where(UpdateEvent.update_run_id == run.id)
+        )
+
+        run.executor_lease_expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        await session.commit()
+        recovered = await recover_unfinished_updates(session)
+        assert recovered == [run]
+        assert recovered[0].state == UpdateState.ROLLBACK_REQUIRED
