@@ -1,3 +1,4 @@
+import imaplib
 import os
 from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
@@ -326,9 +327,10 @@ async def test_mail_rejects_invalid_declared_mime_and_retries_only_when_requeste
         )
         assert retried["ingested"] == 1
         assert retried["retried"] == 1
-        await session.refresh(record)
-        assert record.status == ExternalIngestionStatus.INGESTED
-        assert record.attempt_count == 2
+        updated = await session.get(ExternalIngestion, record.id)
+        assert updated is not None
+        assert updated.status == ExternalIngestionStatus.INGESTED
+        assert updated.attempt_count == 2
 
     invalid = EmailMessage()
     invalid["Message-ID"] = "<invalid@example.test>"
@@ -383,7 +385,7 @@ def test_imap_fetch_is_tls_read_only_bounded_and_uses_peek(
             identity = str(args[0])
             return "OK", [(b"data", f"Message {identity}".encode())]
 
-    monkeypatch.setattr(mail_module.imaplib, "IMAP4_SSL", FakeIMAP)
+    monkeypatch.setattr(imaplib, "IMAP4_SSL", FakeIMAP)
     settings = Settings(
         env="test",
         imap_host="imap.example.test",
