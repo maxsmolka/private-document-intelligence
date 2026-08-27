@@ -147,6 +147,8 @@ services:
       PDI_IMAP_USER: ${PDI_IMAP_USER:-}
       PDI_IMAP_PASSWORD_FILE: /run/secrets/imap_password
       PDI_IMAP_MAILBOX: ${PDI_IMAP_MAILBOX:-INBOX}
+      PDI_IMAP_MAX_MESSAGES_PER_POLL: ${PDI_IMAP_MAX_MESSAGES_PER_POLL:-100}
+      PDI_IMAP_SOCKET_TIMEOUT_SECONDS: ${PDI_IMAP_SOCKET_TIMEOUT_SECONDS:-30}
     volumes:
       - document_storage:/data/documents
       - ${PDI_IMAP_PASSWORD_FILE:-./secrets/imap_password.example}:/run/secrets/imap_password:ro

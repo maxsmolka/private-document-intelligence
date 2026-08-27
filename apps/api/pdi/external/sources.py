@@ -41,6 +41,7 @@ def safe_source_configuration(settings: Settings, source_type: str) -> dict[str,
             "credentials_configured": bool(settings.imap_user and settings.imap_password_file),
             "poll_interval_seconds": settings.mail_poll_interval,
             "max_messages_per_poll": settings.imap_max_messages_per_poll,
+            "socket_timeout_seconds": settings.imap_socket_timeout_seconds,
             "supported_types": ["PDF", "JPEG", "PNG"],
         }
     raise ValueError("Unsupported ingestion source type")
@@ -126,8 +127,7 @@ async def record_poll_success(
     counts = await source_counts(session, source.source_type)
     source.last_checked_at = now
     source.last_report = {key: int(value) for key, value in report.items()}
-    if report.get("ingested", 0):
-        source.last_success_at = now
+    source.last_success_at = now
     if report.get("failed", 0):
         source.last_failure_at = now
         source.last_error = "ItemIngestionFailed"
