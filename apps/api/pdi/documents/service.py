@@ -171,6 +171,7 @@ async def ingest_path(
     document_date: date | None = None,
     document_type: str | None = None,
     canonical_metadata: dict[str, Any] | None = None,
+    original_filename: str | None = None,
 ) -> tuple[Document, bool]:
     mime_type = detect_path_type(path)
     key = f"{uuid.uuid4()}{EXTENSIONS[mime_type]}"
@@ -190,7 +191,7 @@ async def ingest_path(
             stored_key=stored.key,
             stored_size=stored.size,
             stored_sha256=stored.sha256,
-            filename=safe_filename(path.name),
+            filename=safe_filename(original_filename or path.name),
             mime_type=mime_type,
             max_attempts=max_attempts,
             timeout_seconds=timeout_seconds,

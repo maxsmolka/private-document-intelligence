@@ -22,6 +22,7 @@ def safe_source_configuration(settings: Settings, source_type: str) -> dict[str,
     if source_type == "consume":
         return {
             "directory": str(settings.consume_path),
+            "processing_directory": str(settings.consume_processing_path),
             "processed_directory": str(settings.consume_processed_path),
             "failed_directory": str(settings.consume_failed_path),
             "stability_seconds": settings.consume_stability_seconds,
