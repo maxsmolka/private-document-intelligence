@@ -18,4 +18,6 @@ BuildKit provenance and SPDX SBOM attestations are emitted for both images. Keyl
 
 For an upgrade: create a backup, verify it, pull the new explicit image version, allow the API startup migration to complete, restart services, run `pdi readiness`, then run `pdi search verify`. Never deploy `latest` to a persistent installation.
 
+Future managed releases also attach the [machine-readable release manifest](RELEASE_MANIFEST.md). Controlled installs use its exact digests; version tags are discovery labels only. The manual process remains supported.
+
 Rolling an image tag back may be simple only when the newer release made no incompatible database or storage change. Alembic downgrades are not a general recovery guarantee. For a non-backward-compatible migration, restore the verified pre-upgrade PostgreSQL and document-storage backup together, then start the previous image version.

@@ -1,0 +1,10 @@
+{
+  "minimum_supported_version": "1.2.0",
+  "minimum_schema": "20260826_0013",
+  "target_schema": "20260827_0014",
+  "migration_required": true,
+  "reindex_required": false,
+  "backup_required": true,
+  "rollback_mode": "restore_backup",
+  "architectures": ["linux/amd64"]
+}

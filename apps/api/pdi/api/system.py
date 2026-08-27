@@ -1,29 +1,21 @@
 import asyncio
 import platform
 import shutil
-from typing import Annotated, Any
+from typing import Annotated
 
-from alembic.migration import MigrationContext
 from fastapi import APIRouter, Depends, Request
-from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from pdi.core.config import Settings, get_settings
 from pdi.core.database import get_session
+from pdi.core.schema import database_revision
+from pdi.updates.service import latest_cached_release
 from pdi.version import PDI_VERSION
 
 router = APIRouter(prefix="/api/v1/system", tags=["system information"])
 Session = Annotated[AsyncSession, Depends(get_session)]
 AppSettings = Annotated[Settings, Depends(get_settings)]
 _VERSION_CACHE: dict[tuple[str, ...], str | None] = {}
-
-
-def _revision(connection: Any) -> str | None:
-    return MigrationContext.configure(connection).get_current_revision()
-
-
-async def database_revision(session: AsyncSession) -> str | None:
-    connection: AsyncConnection = await session.connection()
-    return await connection.run_sync(_revision)
 
 
 async def command_version(command: str, *arguments: str) -> str | None:
@@ -78,6 +70,7 @@ async def system_info(
         command_version("ocrmypdf", "--version"),
         command_version("tesseract", "--version"),
     )
+    available_release = await latest_cached_release(session)
     return {
         "product_version": PDI_VERSION,
         "backend": {
@@ -108,4 +101,10 @@ async def system_info(
         "version_consistent": version_consistent,
         "revision_consistent": revision_consistent if web_revision else None,
         "warnings": warnings,
+        "update": {
+            "channel": settings.update_channel,
+            "available_version": available_release.version if available_release else None,
+            "update_available": available_release is not None,
+            "last_checked_at": available_release.checked_at if available_release else None,
+        },
     }

@@ -6,7 +6,7 @@ Administrators can inspect `/api/v1/execution/metrics`, `/api/v1/execution/jobs/
 
 Static cross-worker limits are configured as one JSON map in `PDI_EXECUTION_RESOURCE_LIMITS`; priority aging and lease heartbeat use `PDI_EXECUTION_STARVATION_SECONDS` and `PDI_EXECUTION_HEARTBEAT_SECONDS`. Defaults are conservative for a private NAS-style deployment. See [A2 Execution Architecture](A2_EXECUTION_ARCHITECTURE.md).
 
-For upgrades, use the sequence **backup → verify backup → pull explicitly versioned images → run migrations → restart → readiness → search verify**. The API release image runs `alembic upgrade head` before serving traffic. A previous image may not understand a newer schema, so database rollback is not assumed safe; restore the verified pre-upgrade database and storage backup together when an upgrade is not backward compatible. See [RELEASES.md](RELEASES.md).
+For upgrades, use the sequence **backup → verify backup → pull exact immutable images → run migrations → restart → readiness → search verify**. The Controlled Update Manager formalizes this flow while preserving the [manual fallback](UPDATES.md). The API release image runs `alembic upgrade head` before serving traffic. A previous image may not understand a newer schema, so database rollback is not assumed safe; restore the verified pre-upgrade database and storage backup together when an upgrade is not backward compatible. See [RELEASES.md](RELEASES.md).
 
 Before upgrading to v1.1.0, add a protected `PDI_TOTP_ENCRYPTION_KEY` containing 32 random bytes in base64 form to `.env.release`. Keep that value with encrypted deployment-secret backups; losing or changing it makes enabled TOTP secrets unreadable. The key is passed only to the API service.
 

@@ -64,6 +64,15 @@ jobs:
       - run: uv run alembic upgrade head
       - run: uv run alembic check
       - run: uv run ruff check . ../../scripts
+      - name: Validate release-manifest generator policy
+        run: >-
+          python ../../scripts/build_release_manifest.py
+          --version 9.9.9
+          --commit 0123456789abcdef0123456789abcdef01234567
+          --backend-digest sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          --web-digest sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+          --policy ../../release-manifest-policy.json
+          --output /tmp/pdi-release-manifest.json
       - run: uv run ruff format --check . ../../scripts
       - run: uv run mypy .
       - run: uv run pytest

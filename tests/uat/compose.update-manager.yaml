@@ -1,0 +1,81 @@
+name: pdi-update-ui
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: pdi
+      POSTGRES_USER: pdi
+      POSTGRES_PASSWORD: synthetic-uat-only
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pdi -d pdi"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+
+  api:
+    image: pdi-backend:local
+    environment:
+      PDI_ENV: production
+      PDI_DATABASE_URL: postgresql+asyncpg://pdi:synthetic-uat-only@postgres:5432/pdi
+      PDI_STORAGE_PATH: /data/documents
+      PDI_BACKUP_PATH: /backups
+      PDI_AUTH_ENABLED: "true"
+      PDI_SETUP_ENABLED: "true"
+      PDI_AUTH_SECURE_COOKIES: "false"
+      PDI_CORS_ORIGINS: '["http://localhost:13000"]'
+      PDI_TOTP_ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
+      PDI_UPDATE_CHANNEL: manual
+      PDI_UPDATE_BACKEND_DIGEST: sha256:8780616a7863a0f9e27890689afd7821fadb098e4056deb2c125711d8a445473
+      PDI_UPDATE_WEB_DIGEST: sha256:3a3410b9d2dfbcc9fd2e50f3c074490b14d329265709521ab7983b0a073d9581
+      PDI_UPDATE_EXPECTED_SCHEMA: "20260827_0014"
+    volumes:
+      - document_storage:/data/documents
+      - backup_data:/backups
+    ports: ["18000:8000"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready', timeout=2)"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+      start_period: 10s
+
+  worker:
+    image: pdi-backend:local
+    command: ["pdi-worker"]
+    environment:
+      PDI_ENV: production
+      PDI_DATABASE_URL: postgresql+asyncpg://pdi:synthetic-uat-only@postgres:5432/pdi
+      PDI_STORAGE_PATH: /data/documents
+      PDI_AUTH_ENABLED: "true"
+    volumes:
+      - document_storage:/data/documents
+    depends_on:
+      api:
+        condition: service_healthy
+
+  web:
+    image: pdi-web-uat:local
+    environment:
+      PDI_API_INTERNAL_URL: http://api:8000
+      PDI_AUTH_ENABLED: "true"
+    ports: ["13000:3000"]
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/login"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+      start_period: 10s
+
+volumes:
+  postgres_data:
+  document_storage:
+  backup_data:

@@ -31,6 +31,9 @@ from pdi.operations.readiness import readiness
 from pdi.search.service import rebuild_search_index, verify_search_index
 from pdi.storage.dependencies import get_storage
 from pdi.storage.reconcile import reconcile_storage
+from pdi.updates.executor import ComposeDeployment, ComposeDeploymentExecutor
+from pdi.updates.models import UpdateRun
+from pdi.updates.service import serialize_run
 
 
 def output(value: object) -> None:
@@ -239,6 +242,24 @@ async def run_operations(arguments: argparse.Namespace) -> None:
             output(await readiness(session, get_storage(), settings))
 
 
+async def run_update(arguments: argparse.Namespace) -> None:
+    settings = get_settings()
+    deployment = ComposeDeployment(
+        compose_files=tuple(arguments.compose_file),
+        env_file=arguments.env_file,
+        managed_overlay=arguments.managed_overlay,
+    )
+    executor = ComposeDeploymentExecutor(deployment)
+    async with session_factory() as session:
+        run = await session.get(UpdateRun, arguments.run_id)
+        if run is None:
+            raise ValueError("Update run not found")
+        if arguments.dry_run:
+            output(await executor.dry_run(run))
+        else:
+            output(serialize_run(await executor.execute(session, settings, run)))
+
+
 def add_source_options(command: argparse.ArgumentParser) -> None:
     command.add_argument("--url")
     command.add_argument("--token-file", type=Path)
@@ -298,6 +319,22 @@ def parser() -> argparse.ArgumentParser:
     export.add_argument("path", type=Path)
     commands.add_parser("readiness")
     commands.add_parser("health")
+    update = commands.add_parser(
+        "update", help="Run the constrained host-side PDI deployment executor"
+    )
+    update_commands = update.add_subparsers(dest="update_command", required=True)
+    update_execute = update_commands.add_parser("execute")
+    update_execute.add_argument("--run-id", type=uuid.UUID, required=True)
+    update_execute.add_argument(
+        "--compose-file",
+        type=Path,
+        action="append",
+        required=True,
+        help="PDI Compose file; repeat for the NAS base/override pair",
+    )
+    update_execute.add_argument("--env-file", type=Path, required=True)
+    update_execute.add_argument("--managed-overlay", type=Path, required=True)
+    update_execute.add_argument("--dry-run", action="store_true")
     return root
 
 
@@ -313,6 +350,8 @@ def main() -> None:
         asyncio.run(run_user(arguments))
     elif arguments.command == "token":
         asyncio.run(run_token(arguments))
+    elif arguments.command == "update":
+        asyncio.run(run_update(arguments))
     else:
         asyncio.run(run_operations(arguments))
 

@@ -75,6 +75,19 @@ class Settings(BaseSettings):
     paperless_token_file: Path | None = None
     paperless_verify_tls: bool = True
     backup_path: Path = Path("./backups")
+    update_channel: Literal["disabled", "manual", "weekly"] = "manual"
+    update_github_api_url: str = (
+        "https://api.github.com/repos/maxsmolka/private-document-intelligence/releases"
+    )
+    update_manifest_name: str = "pdi-release-manifest.json"
+    update_check_timeout_seconds: float = Field(default=8, ge=1, le=30)
+    update_metadata_cache_seconds: int = Field(default=3600, ge=60, le=86_400)
+    update_min_free_bytes: int = Field(default=2 * 1024 * 1024 * 1024, ge=0)
+    update_drain_timeout_seconds: int = Field(default=300, ge=0, le=3600)
+    update_backend_digest: str | None = None
+    update_web_digest: str | None = None
+    update_expected_schema: str = "20260827_0014"
+    update_deployment_type: Literal["operator_cli"] = "operator_cli"
 
     @model_validator(mode="after")
     def validate_execution_policy(self) -> "Settings":

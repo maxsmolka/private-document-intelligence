@@ -171,7 +171,20 @@ jobs:
           WEB_DIGEST: ${{ steps.web-build.outputs.digest }}
         run: echo "Web digest $WEB_DIGEST" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Generate machine-verifiable release manifest
+        env:
+          BACKEND_DIGEST: ${{ steps.backend-build.outputs.digest }}
+          WEB_DIGEST: ${{ steps.web-build.outputs.digest }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: >-
+          python scripts/build_release_manifest.py
+          --version "$RELEASE_TAG"
+          --commit "$GITHUB_SHA"
+          --backend-digest "$BACKEND_DIGEST"
+          --web-digest "$WEB_DIGEST"
+
       - uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
         with:
-          body_path: docs/releases/v1.2.0.md
+          body_path: docs/releases/${{ github.ref_name }}.md
           generate_release_notes: true
+          files: pdi-release-manifest.json

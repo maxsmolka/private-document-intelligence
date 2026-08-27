@@ -20,6 +20,10 @@ x-backend-environment: &backend-environment
   PDI_AUTH_ENABLED: "true"
   PDI_SETUP_ENABLED: ${PDI_SETUP_ENABLED:-true}
   PDI_AUTH_SECURE_COOKIES: ${PDI_AUTH_SECURE_COOKIES:-true}
+  PDI_UPDATE_CHANNEL: ${PDI_UPDATE_CHANNEL:-manual}
+  PDI_UPDATE_BACKEND_DIGEST: ${PDI_UPDATE_BACKEND_DIGEST:?set the installed immutable backend digest in .env.release}
+  PDI_UPDATE_WEB_DIGEST: ${PDI_UPDATE_WEB_DIGEST:?set the installed immutable web digest in .env.release}
+  PDI_UPDATE_EXPECTED_SCHEMA: ${PDI_UPDATE_EXPECTED_SCHEMA:-20260827_0014}
 
 services:
   postgres:

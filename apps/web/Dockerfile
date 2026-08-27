@@ -18,6 +18,10 @@ ENV NEXT_PUBLIC_PDI_API_URL=$NEXT_PUBLIC_PDI_API_URL \
     NEXT_PUBLIC_PDI_BUILD_TIME=$PDI_BUILD_TIME
 RUN npm run lint && npm run build
 
+FROM dependencies AS test
+COPY . .
+RUN npm run lint && npm run typecheck && npm run test
+
 FROM node:22-alpine AS runtime
 ARG PDI_VERSION=1.2.0
 ARG PDI_REVISION=unknown

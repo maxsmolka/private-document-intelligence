@@ -34,6 +34,7 @@ PDI has local authentication but is still intended for a private network or VPN,
 - zero-user-only first-admin setup with PostgreSQL serialization, strict allowed-origin validation, and permanent database-derived disablement
 - read-only secret files for IMAP and Paperless; no secret values in manifests, logs, exports, or Compose
 - checksummed backup inventories, path containment, corruption refusal, and non-empty restore refusal
+- admin-session/CSRF-only controlled updates, official manifest/digest allowlists, and a host-side executor without Docker access in the API
 
 ## Malformed documents and resource exhaustion
 
