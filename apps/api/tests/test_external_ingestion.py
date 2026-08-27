@@ -1,3 +1,4 @@
+import imaplib
 import os
 from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
@@ -9,8 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from pdi.core.config import Settings
 from pdi.documents.models import Document
+from pdi.external import mail as mail_module
 from pdi.external.consume import process_consume_once
-from pdi.external.mail import process_message
+from pdi.external.mail import fetch_messages, poll_once, process_message, retry_uids
 from pdi.operations.models import (
     ExternalIngestion,
     ExternalIngestionStatus,
@@ -258,7 +260,10 @@ async def test_mail_ingests_supported_attachments_and_is_idempotent(
             mailbox_identity="fixture/INBOX",
             storage=storage,
         )
-        assert first == {"ingested": 2, "duplicates": 0, "unsupported": 1, "failed": 0}
+        assert first["ingested"] == 2
+        assert first["unsupported"] == 1
+        assert first["failed"] == 0
+        assert first["messages"] == 1
         second = await process_message(
             session,
             settings,
@@ -268,3 +273,233 @@ async def test_mail_ingests_supported_attachments_and_is_idempotent(
         )
         assert second["duplicates"] == 2
         assert await session.scalar(select(func.count()).select_from(Document)) == 2
+        filenames = set(await session.scalars(select(Document.original_filename)))
+        assert filenames == {"one.pdf", "two.pdf"}
+
+
+async def test_mail_rejects_invalid_declared_mime_and_retries_only_when_requested(
+    tmp_path: Path, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    storage = LocalStorageBackend(tmp_path / "storage")
+    message = EmailMessage()
+    message["Message-ID"] = "<retry@example.test>"
+    message.set_content("Attachment")
+    message.add_attachment(PDF, maintype="application", subtype="pdf", filename="retry.pdf")
+    constrained = Settings(env="test", storage_path=tmp_path / "storage", max_upload_size=10)
+    normal = Settings(env="test", storage_path=tmp_path / "storage", max_upload_size=1024)
+    async with session_factory() as session:
+        failed = await process_message(
+            session,
+            constrained,
+            message.as_bytes(),
+            mailbox_identity="fixture/INBOX",
+            message_uid="42",
+            storage=storage,
+        )
+        assert failed["failed"] == 1
+        record = await session.scalar(select(ExternalIngestion))
+        assert record is not None
+        assert record.status == ExternalIngestionStatus.FAILED
+        assert record.attempt_count == 1
+        assert record.error is not None and ":" not in record.error
+
+        unchanged = await process_message(
+            session,
+            normal,
+            message.as_bytes(),
+            mailbox_identity="fixture/INBOX",
+            message_uid="42",
+            storage=storage,
+        )
+        assert unchanged["failed"] == 1
+        await session.refresh(record)
+        assert record.attempt_count == 1
+
+        record.retry_requested_at = datetime.now(UTC)
+        await session.commit()
+        retried = await process_message(
+            session,
+            normal,
+            message.as_bytes(),
+            mailbox_identity="fixture/INBOX",
+            message_uid="42",
+            storage=storage,
+        )
+        assert retried["ingested"] == 1
+        assert retried["retried"] == 1
+        updated = await session.get(ExternalIngestion, record.id)
+        assert updated is not None
+        assert updated.status == ExternalIngestionStatus.INGESTED
+        assert updated.attempt_count == 2
+
+    invalid = EmailMessage()
+    invalid["Message-ID"] = "<invalid@example.test>"
+    invalid.set_content("Attachment")
+    invalid.add_attachment(
+        b"not a PDF", maintype="application", subtype="pdf", filename="invalid.pdf"
+    )
+    async with session_factory() as session:
+        result = await process_message(
+            session,
+            normal,
+            invalid.as_bytes(),
+            mailbox_identity="fixture/INBOX",
+            message_uid="43",
+            storage=storage,
+        )
+        assert result["failed"] == 1
+
+
+def test_imap_fetch_is_tls_read_only_bounded_and_uses_peek(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    password_file = tmp_path / "imap-password"
+    password_file.write_text("secret\n", encoding="utf-8")
+    calls: list[tuple[object, ...]] = []
+
+    class FakeIMAP:
+        def __init__(self, host: str, port: int, *, timeout: float) -> None:
+            calls.append(("connect", host, port, timeout))
+
+        def __enter__(self) -> "FakeIMAP":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            del args
+
+        def login(self, user: str, password: str) -> None:
+            calls.append(("login", user, password))
+
+        def select(self, mailbox: str, *, readonly: bool) -> tuple[str, list[bytes]]:
+            calls.append(("select", mailbox, readonly))
+            return "OK", [b""]
+
+        def response(self, code: str) -> tuple[str, list[bytes]]:
+            calls.append(("response", code))
+            return "UIDVALIDITY", [b"99"]
+
+        def uid(self, command: str, *args: object) -> tuple[str, list[object]]:
+            calls.append(("uid", command, *args))
+            if command == "search":
+                return "OK", [b"2 3 4"]
+            identity = str(args[0])
+            return "OK", [(b"data", f"Message {identity}".encode())]
+
+    monkeypatch.setattr(imaplib, "IMAP4_SSL", FakeIMAP)
+    settings = Settings(
+        env="test",
+        imap_host="imap.example.test",
+        imap_port=993,
+        imap_user="scanner",
+        imap_password_file=password_file,
+        imap_mailbox="Archive",
+        imap_max_messages_per_poll=2,
+        imap_socket_timeout_seconds=12,
+    )
+    messages, last_uid, uid_validity = fetch_messages(
+        settings, after_uid=1, expected_uid_validity=99, retry_uids=[4]
+    )
+    assert [identity for identity, _ in messages] == ["4", "2"]
+    assert last_uid == 2
+    assert uid_validity == 99
+    assert ("connect", "imap.example.test", 993, 12.0) in calls
+    assert ("select", "Archive", True) in calls
+    fetch_calls = [call for call in calls if call[:2] == ("uid", "fetch")]
+    assert len(fetch_calls) == 2
+    assert all(call[-1] == "(BODY.PEEK[])" for call in fetch_calls)
+    calls.clear()
+    _, reset_uid, _ = fetch_messages(settings, after_uid=100, expected_uid_validity=98)
+    assert reset_uid == 3
+    assert ("uid", "search", "UID", "1:*") in calls
+
+
+async def test_mail_poll_failure_updates_source_health_without_exposing_detail(
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    password_file = tmp_path / "imap-password"
+    password_file.write_text("secret", encoding="utf-8")
+    settings = Settings(
+        env="test",
+        mail_enabled=True,
+        imap_host="imap.example.test",
+        imap_user="scanner",
+        imap_password_file=password_file,
+    )
+
+    def unavailable(*args: object, **kwargs: object) -> tuple[list[tuple[str, bytes]], int, int]:
+        del args, kwargs
+        raise OSError("sensitive server detail")
+
+    monkeypatch.setattr(mail_module, "session_factory", session_factory)
+    monkeypatch.setattr(mail_module, "fetch_messages", unavailable)
+    with pytest.raises(OSError):
+        await poll_once(settings)
+    async with session_factory() as session:
+        source = await session.scalar(select(IngestionSource))
+        assert source is not None
+        assert source.health == IngestionSourceHealth.DEGRADED
+        assert source.last_error == "OSError"
+        assert "sensitive" not in str(source.last_report).casefold()
+
+
+async def test_mail_poll_persists_uid_cursor_and_successful_health(
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    password_file = tmp_path / "imap-password"
+    password_file.write_text("secret", encoding="utf-8")
+    settings = Settings(
+        env="test",
+        mail_enabled=True,
+        imap_host="imap.example.test",
+        imap_user="scanner",
+        imap_password_file=password_file,
+    )
+    observed_cursors: list[int] = []
+
+    def successful(
+        settings: Settings,
+        *,
+        after_uid: int,
+        expected_uid_validity: int,
+        retry_uids: list[int],
+    ) -> tuple[list[tuple[str, bytes]], int, int]:
+        del settings, expected_uid_validity, retry_uids
+        observed_cursors.append(after_uid)
+        return [], 7, 99
+
+    monkeypatch.setattr(mail_module, "session_factory", session_factory)
+    monkeypatch.setattr(mail_module, "fetch_messages", successful)
+    first = await poll_once(settings)
+    second = await poll_once(settings)
+    assert first["last_uid"] == 7
+    assert second["last_uid"] == 7
+    assert second["uid_validity"] == 99
+    assert observed_cursors == [0, 7]
+    async with session_factory() as session:
+        source = await session.scalar(select(IngestionSource))
+        assert source is not None
+        assert source.health == IngestionSourceHealth.HEALTHY
+        assert source.last_success_at is not None
+
+
+async def test_mail_retry_is_rejected_after_mailbox_identity_changes(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with session_factory() as session:
+        record = ExternalIngestion(
+            source_type="mail",
+            source_key="mailbox:message:0:hash",
+            status=ExternalIngestionStatus.FAILED,
+            provenance={"message_uid": "42", "message_uid_validity": 10},
+            retry_requested_at=datetime.now(UTC),
+        )
+        session.add(record)
+        await session.commit()
+        assert await retry_uids(session, 11) == []
+        await session.refresh(record)
+        assert record.retry_requested_at is None
+        assert record.error == "MailboxIdentityChanged"
