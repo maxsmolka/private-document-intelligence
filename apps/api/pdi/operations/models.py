@@ -44,6 +44,13 @@ class ExternalIngestionStatus(StrEnum):
     FAILED = "failed"
 
 
+class IngestionSourceHealth(StrEnum):
+    UNKNOWN = "unknown"
+    HEALTHY = "healthy"
+    DEGRADED = "degraded"
+    DISABLED = "disabled"
+
+
 class UserRole(StrEnum):
     ADMIN = "admin"
     USER = "user"
@@ -207,6 +214,36 @@ class MigrationItem(Base):
     )
 
 
+class IngestionSource(Base):
+    __tablename__ = "ingestion_sources"
+    __table_args__ = (Index("ix_ingestion_sources_type", "source_type"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    source_key: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    source_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    health: Mapped[IngestionSourceHealth] = mapped_column(
+        Enum(
+            IngestionSourceHealth,
+            name="ingestion_source_health",
+            values_callable=lambda e: [x.value for x in e],
+        ),
+        default=IngestionSourceHealth.UNKNOWN,
+        nullable=False,
+    )
+    safe_configuration: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_failure_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    last_report: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class ExternalIngestion(Base):
     __tablename__ = "external_ingestions"
     __table_args__ = (
@@ -233,6 +270,11 @@ class ExternalIngestion(Base):
     )
     provenance: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    retry_requested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

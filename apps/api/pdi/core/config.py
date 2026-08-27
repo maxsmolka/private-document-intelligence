@@ -64,6 +64,7 @@ class Settings(BaseSettings):
     consume_failed_path: Path = Path("./consume-failed")
     consume_stability_seconds: int = Field(default=10, ge=1, le=3600)
     consume_poll_interval: float = Field(default=2, gt=0, le=300)
+    consume_enabled: bool = False
     mail_enabled: bool = False
     imap_host: str | None = None
     imap_port: int = Field(default=993, ge=1, le=65535)
@@ -71,6 +72,8 @@ class Settings(BaseSettings):
     imap_password_file: Path | None = None
     imap_mailbox: str = "INBOX"
     mail_poll_interval: float = Field(default=60, ge=5, le=3600)
+    imap_max_messages_per_poll: int = Field(default=100, ge=1, le=1000)
+    imap_socket_timeout_seconds: float = Field(default=30, ge=1, le=120)
     paperless_url: str | None = None
     paperless_token_file: Path | None = None
     paperless_verify_tls: bool = True
