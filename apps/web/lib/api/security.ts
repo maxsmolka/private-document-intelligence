@@ -16,6 +16,7 @@ export type SystemInfo = {
   version_consistent: boolean;
   revision_consistent: boolean | null;
   warnings: string[];
+  update: { channel: string; available_version: string | null; update_available: boolean; last_checked_at: string | null };
 };
 
 function csrfToken() {

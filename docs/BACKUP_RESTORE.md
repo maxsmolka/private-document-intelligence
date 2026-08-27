@@ -2,6 +2,8 @@
 
 A backup is a transparent directory containing `database/pdi.dump`, copied storage assets, `manifest.json`, and `checksums.sha256`. The manifest records format version, timestamp, inventory, document/asset counts, and hashes. It contains no credentials.
 
+Controlled updates create a timestamped backup under the configured update backup directory, verify it immediately, and link its database record to the update run. These backups are pinned by policy: PDI does not automatically delete them. Delete one only after the safety period and a newer restore drill, and never while its update may require rollback.
+
 ```bash
 docker compose exec -T api pdi backup create /backups/2026-08-20
 docker compose exec -T api pdi backup verify /backups/2026-08-20

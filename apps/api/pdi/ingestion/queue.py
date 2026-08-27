@@ -27,6 +27,7 @@ from pdi.ingestion.models import (
     IngestionJobState,
 )
 from pdi.ingestion.state import TERMINAL_STATES, validate_transition
+from pdi.updates.service import maintenance_enabled
 
 ACTIVE_STATES = (
     IngestionJobState.CLAIMED,
@@ -297,6 +298,9 @@ async def claim_job(
     resource_limits: Mapping[str | ResourceClass, int] | None = None,
     starvation_seconds: int = 900,
 ) -> IngestionJob | None:
+    if await maintenance_enabled(session):
+        await session.commit()
+        return None
     now = datetime.now(UTC)
     await advisory_xact_lock(session, "execution-admission", "global")
     await _fail_blocked_dependencies(session)

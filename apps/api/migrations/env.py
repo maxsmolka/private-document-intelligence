@@ -12,6 +12,7 @@ from pdi.ingestion import models as ingestion_models  # noqa: F401
 from pdi.knowledge import models as knowledge_models  # noqa: F401
 from pdi.operations import models as operations_models  # noqa: F401
 from pdi.search import models as search_models  # noqa: F401
+from pdi.updates import models as update_models  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", get_settings().database_url)

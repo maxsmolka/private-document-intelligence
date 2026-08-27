@@ -65,6 +65,7 @@ describe("security settings state synchronization", () => {
       runtime: { platform: "Linux", architecture: "x86_64", deployment_type: "container" },
       ocr: { provider: "ocrmypdf", ocrmypdf_version: "16", tesseract_version: "5" }, intelligence: { provider: "deterministic", model: null },
       version_consistent: false, revision_consistent: false, warnings: ["Backend version 1.1.0 does not match web version 1.0.2."],
+      update: { channel: "manual", available_version: null, update_available: false, last_checked_at: null },
     });
     render(<AboutPanel />);
     expect(await screen.findByRole("alert")).toHaveTextContent("does not match");

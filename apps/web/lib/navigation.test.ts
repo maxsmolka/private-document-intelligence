@@ -21,6 +21,8 @@ describe("activeNavigationRoute", () => {
     ["security settings", "/settings/security", "/settings/security"],
     ["session settings", "/settings/sessions", "/settings/sessions"],
     ["token settings", "/settings/tokens", "/settings/tokens"],
+    ["update settings", "/settings/updates", "/settings/updates"],
+    ["update run", "/settings/updates/run/123", "/settings/updates"],
     ["about settings", "/settings/about", "/settings/about"],
     ["user administration", "/admin/users", "/admin/users"],
   ])("owns the %s route", (_label, pathname, expected) => {

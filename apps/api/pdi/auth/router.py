@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +19,7 @@ from pdi.auth.service import (
 from pdi.core.config import Settings, get_settings
 from pdi.core.database import get_session
 from pdi.operations.models import LocalUser, UserSession
+from pdi.updates.service import maintenance_enabled
 
 router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
 Session = Annotated[AsyncSession, Depends(get_session)]
@@ -42,6 +43,18 @@ class SessionRead(BaseModel):
 
 async def require_auth(request: Request, session: Session, settings: AppSettings) -> Principal:
     principal = await authenticate(request, session, settings)
+    path = request.url.path
+    allowed_during_maintenance = (
+        path == "/api/v1/system/update"
+        or path.startswith("/api/v1/system/update/")
+        or path == "/api/v1/auth/logout"
+    )
+    if (
+        request.method not in {"GET", "HEAD", "OPTIONS"}
+        and not allowed_during_maintenance
+        and await maintenance_enabled(session)
+    ):
+        raise HTTPException(status_code=503, detail="PDI is in controlled update maintenance mode")
     request.state.principal = principal
     return principal
 
