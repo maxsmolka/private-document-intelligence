@@ -9,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from pdi.auth.service import create_user
 from pdi.core.config import Settings
+from pdi.documents.models import Document
+from pdi.ingestion.models import IngestionJob, IngestionJobState
 from pdi.operations.models import BackupRecord, UserRole
 from pdi.storage.local import LocalStorageBackend
 from pdi.updates.discovery import ReleaseDiscoveryError, discover_release
@@ -22,6 +24,7 @@ from pdi.updates.manifest import validate_manifest
 from pdi.updates.models import CachedRelease, UpdateEvent, UpdateRun, UpdateState
 from pdi.updates.service import (
     create_plan,
+    maintenance_enabled,
     prepare_update,
     recover_unfinished_updates,
     set_maintenance,
@@ -433,24 +436,156 @@ async def test_prepare_requires_and_links_a_fresh_verified_backup(
         )
         session.add(run)
         await session.commit()
+        run_id = run.id
         prepared = await prepare_update(session, storage, settings, run)
         assert prepared.state == UpdateState.AWAITING_EXECUTION
         assert prepared.backup_id is not None
         assert prepared.preflight["result"] == "PASS WITH WARNINGS"
+    async with session_factory() as verification_session:
+        persisted = await verification_session.get(UpdateRun, run_id)
+        assert persisted is not None
+        assert persisted.state == UpdateState.AWAITING_EXECUTION
+        assert persisted.backup_id == prepared.backup_id
+        assert persisted.preflight["result"] == "PASS WITH WARNINGS"
 
 
 @pytest.mark.parametrize(
-    ("failed_fragment", "failure_code", "migration_required", "expected_state"),
+    ("failure_mode", "failure_code"),
+    [("backup", "BACKUP_FAILED"), ("drain", "DRAIN_FAILED")],
+)
+async def test_prepare_blocks_before_installation_on_backup_or_drain_failure(
+    failure_mode: str,
+    failure_code: str,
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def ready(*args: object) -> dict[str, object]:
+        del args
+        return {
+            "result": "PASS",
+            "checks": {
+                "database": "pass",
+                "storage_writable": "pass",
+                "search_consistent": "pass",
+                "original_assets_present": "pass",
+                "authentication": "pass",
+                "verified_backup": "warning",
+            },
+        }
+
+    async def revision(session: AsyncSession) -> str:
+        del session
+        return "20260826_0013"
+
+    async def backup(
+        destination: Path, *, database_url: str, storage: object, session: AsyncSession
+    ) -> dict[str, str]:
+        del destination, database_url, storage
+        if failure_mode == "backup":
+            raise RuntimeError("Synthetic backup failure")
+        record = BackupRecord(
+            path="redacted", manifest_hash="f" * 64, verified_at=datetime.now(UTC)
+        )
+        session.add(record)
+        await session.commit()
+        return {"backup_id": str(record.id)}
+
+    monkeypatch.setattr("pdi.updates.service.readiness", ready)
+    monkeypatch.setattr("pdi.updates.service.database_revision", revision)
+    monkeypatch.setattr("pdi.updates.service.create_backup", backup)
+    monkeypatch.setattr("pdi.updates.service.verify_backup", lambda path: {"result": "PASS"})
+    settings = Settings(
+        env="test",
+        storage_path=tmp_path / "storage",
+        backup_path=tmp_path / "backups",
+        update_min_free_bytes=0,
+        update_expected_schema="20260826_0013",
+        update_drain_timeout_seconds=0,
+    )
+    storage = LocalStorageBackend(settings.storage_path)
+    async with session_factory() as session:
+        if failure_mode == "drain":
+            document = Document(
+                title="Synthetic active update test",
+                original_filename="active.pdf",
+                mime_type="application/pdf",
+                file_size=1,
+                sha256="e" * 64,
+                storage_key="active.pdf",
+            )
+            session.add(document)
+            await session.flush()
+            session.add(
+                IngestionJob(
+                    document_id=document.id,
+                    state=IngestionJobState.EXTRACTING,
+                    stage="extraction",
+                )
+            )
+        run = UpdateRun(
+            state=UpdateState.PLANNED,
+            active_guard=True,
+            from_version="1.3.0",
+            to_version=VERSION,
+            release_commit=COMMIT,
+            schema_before="20260826_0013",
+            schema_target="20260827_0014",
+            previous_backend_digest=DIGEST_A,
+            previous_web_digest=DIGEST_B,
+            target_backend_digest=DIGEST_C,
+            target_web_digest=DIGEST_D,
+            migration_required=True,
+            reindex_required=False,
+            backup_required=True,
+            rollback_mode="restore_backup",
+            expected_downtime="short",
+            architecture="linux/amd64",
+            compatibility="compatible",
+            warnings=[],
+            preflight={},
+        )
+        session.add(run)
+        await session.commit()
+        failed = await prepare_update(session, storage, settings, run)
+        assert failed.state == UpdateState.FAILED
+        assert failed.failure_code == failure_code
+        if failure_mode == "backup":
+            assert failed.backup_id is None
+        else:
+            assert failed.backup_id is not None
+        assert not await maintenance_enabled(session)
+
+
+@pytest.mark.parametrize(
+    (
+        "failed_fragment",
+        "failure_mode",
+        "failure_code",
+        "migration_required",
+        "expected_state",
+    ),
     [
-        ("docker pull", "PULL_FAILED", True, UpdateState.FAILED),
-        ("alembic upgrade", "MIGRATION_FAILED", True, UpdateState.ROLLBACK_REQUIRED),
-        ("pdi readiness", "READINESS_FAILED", True, UpdateState.ROLLBACK_REQUIRED),
-        ("pdi search verify", "SEARCH_FAILED", True, UpdateState.ROLLBACK_REQUIRED),
-        ("pdi readiness", "READINESS_FAILED", False, UpdateState.FAILED),
+        ("docker pull", "command", "PULL_FAILED", True, UpdateState.FAILED),
+        ("RepoDigests", "digest", "PULL_FAILED", True, UpdateState.FAILED),
+        ("revision", "revision", "PULL_FAILED", True, UpdateState.FAILED),
+        ("alembic upgrade", "command", "MIGRATION_FAILED", True, UpdateState.ROLLBACK_REQUIRED),
+        ("up -d --wait", "command", "START_FAILED", True, UpdateState.ROLLBACK_REQUIRED),
+        ("pdi readiness", "readiness", "READINESS_FAILED", True, UpdateState.ROLLBACK_REQUIRED),
+        ("pdi search verify", "search", "SEARCH_FAILED", True, UpdateState.ROLLBACK_REQUIRED),
+        (
+            "pdi storage reconcile",
+            "storage",
+            "STORAGE_FAILED",
+            True,
+            UpdateState.ROLLBACK_REQUIRED,
+        ),
+        ("pdi readiness", "readiness", "READINESS_FAILED", False, UpdateState.FAILED),
     ],
 )
 async def test_executor_failure_semantics_are_stage_aware(
     failed_fragment: str,
+    failure_mode: str,
     failure_code: str,
     migration_required: bool,
     expected_state: UpdateState,
@@ -471,10 +606,16 @@ async def test_executor_failure_semantics_are_stage_aware(
         calls.append(arguments)
         rendered = " ".join(arguments)
         if failed_fragment in rendered:
-            if failure_code == "READINESS_FAILED":
+            if failure_mode == "digest":
+                return "[]"
+            if failure_mode == "revision":
+                return "0" * 40
+            if failure_mode == "readiness":
                 return '{"result": "FAIL"}'
-            if failure_code == "SEARCH_FAILED":
+            if failure_mode == "search":
                 return '{"missing": 1, "stale": 0}'
+            if failure_mode == "storage":
+                return '{"missing_files": ["synthetic"], "orphaned_files": []}'
             raise DeploymentExecutionError(
                 failure_code, "Synthetic safe failure", post_migration="alembic" in failed_fragment
             )
@@ -528,8 +669,10 @@ async def test_executor_failure_semantics_are_stage_aware(
         )
         session.add(run)
         await session.commit()
+        await set_maintenance(session, True, run_id=run.id)
         failed = await executor.execute(session, Settings(env="test"), run)
         assert failed.state == expected_state
+        assert failed.state != UpdateState.COMPLETED
         assert failed.failure_code == failure_code
         current_image = json.loads(overlay.read_text())["services"]["api"]["image"]
         assert current_image.endswith(
@@ -538,6 +681,9 @@ async def test_executor_failure_semantics_are_stage_aware(
         if not migration_required:
             starts = [call for call in calls if "up" in call and "--wait" in call]
             assert len(starts) == 2
+        assert await maintenance_enabled(session) is (
+            expected_state == UpdateState.ROLLBACK_REQUIRED
+        )
 
 
 async def test_crash_recovery_does_not_replay_destructive_steps_and_redacts_secrets(

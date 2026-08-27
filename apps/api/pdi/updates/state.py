@@ -44,6 +44,7 @@ def transition(
     previous = run.state
     run.state = target
     run.active_guard = True if target in ACTIVE_UPDATE_STATES else None
+    session.add(run)
     if target in {
         UpdateState.COMPLETED,
         UpdateState.FAILED,
