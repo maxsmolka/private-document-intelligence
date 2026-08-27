@@ -436,10 +436,17 @@ async def test_prepare_requires_and_links_a_fresh_verified_backup(
         )
         session.add(run)
         await session.commit()
+        run_id = run.id
         prepared = await prepare_update(session, storage, settings, run)
         assert prepared.state == UpdateState.AWAITING_EXECUTION
         assert prepared.backup_id is not None
         assert prepared.preflight["result"] == "PASS WITH WARNINGS"
+    async with session_factory() as verification_session:
+        persisted = await verification_session.get(UpdateRun, run_id)
+        assert persisted is not None
+        assert persisted.state == UpdateState.AWAITING_EXECUTION
+        assert persisted.backup_id == prepared.backup_id
+        assert persisted.preflight["result"] == "PASS WITH WARNINGS"
 
 
 @pytest.mark.parametrize(
