@@ -105,8 +105,7 @@ async def test_discovery_allows_prerelease_only_when_explicitly_enabled() -> Non
         return candidate_manifest
 
     assert (
-        await discover_release(Settings(env="test"), current_version="1.2.0", fetcher=fetch)
-        is None
+        await discover_release(Settings(env="test"), current_version="1.2.0", fetcher=fetch) is None
     )
     discovered = await discover_release(
         Settings(env="test", update_allow_prerelease=True),
