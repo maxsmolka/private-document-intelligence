@@ -12,6 +12,7 @@ from pdi.core.config import get_settings
 from pdi.core.logging import configure_logging
 from pdi.core.middleware import RequestContextMiddleware
 from pdi.documents.router import router as documents_router
+from pdi.execution.router import router as execution_router
 from pdi.ingestion.router import router as review_router
 from pdi.intelligence.router import router as intelligence_router
 from pdi.knowledge.router import router as knowledge_router
@@ -42,6 +43,7 @@ def create_app() -> FastAPI:
     application.include_router(search_router, dependencies=protected)
     application.include_router(knowledge_router, dependencies=protected)
     application.include_router(operations_router, dependencies=protected)
+    application.include_router(execution_router, dependencies=protected)
     application.include_router(account_router, dependencies=protected)
     application.include_router(admin_router, dependencies=protected)
     application.include_router(system_router, dependencies=protected)

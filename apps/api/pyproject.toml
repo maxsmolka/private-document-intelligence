@@ -1,6 +1,6 @@
 [project]
 name = "pdi-api"
-version = "1.1.2"
+version = "1.2.0"
 description = "Private Document Intelligence API"
 requires-python = ">=3.13"
 dependencies = [
@@ -28,6 +28,7 @@ pdi-benchmark-retrieval = "pdi.search.benchmark:main"
 pdi-benchmark-knowledge = "pdi.knowledge.benchmark:main"
 pdi-benchmark-operations = "pdi.operations.benchmark:main"
 pdi-benchmark-architecture = "pdi.architecture.benchmark:main"
+pdi-benchmark-execution = "pdi.execution.benchmark:main"
 
 [dependency-groups]
 dev = [

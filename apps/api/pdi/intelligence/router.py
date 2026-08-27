@@ -57,5 +57,7 @@ async def analyze_document(
     document_id: UUID, session: Session, settings: AppSettings
 ) -> IngestionJobRead:
     document = await get_document(session, document_id)
-    job = await retry_document_job(session, document, settings.worker_max_attempts)
+    job = await retry_document_job(
+        session, document, settings.worker_max_attempts, settings.worker_job_timeout
+    )
     return IngestionJobRead.model_validate(job)

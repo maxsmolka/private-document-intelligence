@@ -47,7 +47,8 @@ async def test_claim_is_ordered_exclusive_and_audited(
         second = await claim_job(second_session, "worker-two")
         assert second is None
         events = list((await second_session.scalars(select(IngestionJobEvent))).all())
-        assert [(event.from_state, event.to_state) for event in events] == [("queued", "claimed")]
+        assert [event.event_type for event in events] == ["created", "admitted", "claimed"]
+        assert (events[-1].from_state, events[-1].to_state) == ("queued", "claimed")
 
 
 async def test_failure_retry_and_max_attempts(

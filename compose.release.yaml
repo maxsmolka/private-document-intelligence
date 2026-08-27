@@ -38,7 +38,7 @@ services:
     restart: unless-stopped
 
   api:
-    image: ghcr.io/maxsmolka/private-document-intelligence/backend:${PDI_VERSION:-1.1.2}
+    image: ghcr.io/maxsmolka/private-document-intelligence/backend:${PDI_VERSION:-1.2.0}
     environment:
       <<: *backend-environment
       PDI_CORS_ORIGINS: '["${PDI_PUBLIC_URL:?set in .env.release}"]'
@@ -59,7 +59,7 @@ services:
     restart: unless-stopped
 
   worker:
-    image: ghcr.io/maxsmolka/private-document-intelligence/backend:${PDI_VERSION:-1.1.2}
+    image: ghcr.io/maxsmolka/private-document-intelligence/backend:${PDI_VERSION:-1.2.0}
     command: ["pdi-worker"]
     environment:
       <<: *backend-environment
@@ -81,7 +81,7 @@ services:
     restart: unless-stopped
 
   web:
-    image: ghcr.io/maxsmolka/private-document-intelligence/web:${PDI_VERSION:-1.1.2}
+    image: ghcr.io/maxsmolka/private-document-intelligence/web:${PDI_VERSION:-1.2.0}
     environment:
       PDI_API_INTERNAL_URL: http://api:8000
       PDI_AUTH_ENABLED: "true"

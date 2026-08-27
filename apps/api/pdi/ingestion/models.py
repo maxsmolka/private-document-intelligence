@@ -23,6 +23,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from pdi.core.models import Base
+from pdi.execution.specification import FailureClass, ResourceClass, TaskPriority, TaskType
 
 if TYPE_CHECKING:
     from pdi.documents.models import Document
@@ -34,6 +35,9 @@ class IngestionJobState(StrEnum):
     EXTRACTING = "extracting"
     OCR = "ocr"
     NORMALIZING = "normalizing"
+    CANCEL_REQUESTED = "cancel_requested"
+    CANCELLED = "cancelled"
+    TIMED_OUT = "timed_out"
     COMPLETED = "completed"
     FAILED = "failed"
 
@@ -96,8 +100,31 @@ class DocumentAsset(Base):
 class IngestionJob(Base):
     __tablename__ = "ingestion_jobs"
     __table_args__ = (
-        Index("ix_ingestion_jobs_claim", "state", "available_at", "created_at"),
+        Index(
+            "ix_ingestion_jobs_claim",
+            "state",
+            "priority",
+            "available_at",
+            "created_at",
+        ),
+        Index(
+            "ix_ingestion_jobs_schedule_aged",
+            "state",
+            "resource_class",
+            "created_at",
+            "id",
+        ),
+        Index(
+            "ix_ingestion_jobs_schedule_priority",
+            "state",
+            "resource_class",
+            "priority",
+            "created_at",
+            "id",
+        ),
         Index("ix_ingestion_jobs_document", "document_id", "created_at"),
+        Index("ix_ingestion_jobs_dependency", "dependency_job_id"),
+        UniqueConstraint("idempotency_key", name="uq_ingestion_jobs_idempotency_key"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -113,8 +140,33 @@ class IngestionJob(Base):
         default=IngestionJobState.QUEUED,
     )
     stage: Mapped[str] = mapped_column(String(50), default="queued")
+    task_type: Mapped[TaskType] = mapped_column(
+        Enum(TaskType, name="task_type", values_callable=lambda values: [v.value for v in values]),
+        default=TaskType.DOCUMENT_INGESTION,
+    )
+    priority: Mapped[TaskPriority] = mapped_column(
+        Enum(
+            TaskPriority,
+            name="task_priority",
+            values_callable=lambda values: [v.value for v in values],
+        ),
+        default=TaskPriority.NORMAL,
+    )
+    resource_class: Mapped[ResourceClass] = mapped_column(
+        Enum(
+            ResourceClass,
+            name="resource_class",
+            values_callable=lambda values: [v.value for v in values],
+        ),
+        default=ResourceClass.CPU_HEAVY,
+    )
     attempt_count: Mapped[int] = mapped_column(Integer, default=0)
     max_attempts: Mapped[int] = mapped_column(Integer, default=3)
+    timeout_seconds: Mapped[int] = mapped_column(Integer, default=300)
+    idempotency_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    dependency_job_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ingestion_jobs.id", ondelete="SET NULL"), nullable=True
+    )
     claimed_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
     claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -123,6 +175,19 @@ class IngestionJob(Base):
     )
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancel_requested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    failure_class: Mapped[FailureClass | None] = mapped_column(
+        Enum(
+            FailureClass,
+            name="failure_class",
+            values_callable=lambda values: [v.value for v in values],
+        ),
+        nullable=True,
+    )
+    admission_deferrals: Mapped[int] = mapped_column(Integer, default=0)
     last_error_category: Mapped[str | None] = mapped_column(String(100), nullable=True)
     last_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -148,8 +213,36 @@ class IngestionJobEvent(Base):
     stage: Mapped[str] = mapped_column(String(50))
     worker_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     detail: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    event_type: Mapped[str] = mapped_column(String(50), default="transition")
+    attempt: Mapped[int] = mapped_column(Integer, default=0)
+    duration_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    event_metadata: Mapped[dict[str, Any]] = mapped_column("metadata", JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     job: Mapped[IngestionJob] = relationship(back_populates="events")
+
+
+class ExecutionResourceLease(Base):
+    __tablename__ = "execution_resource_leases"
+    __table_args__ = (
+        UniqueConstraint("job_id", "resource_class", name="uq_execution_lease_job_resource"),
+        Index("ix_execution_resource_leases_class", "resource_class", "heartbeat_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("ingestion_jobs.id", ondelete="CASCADE"), nullable=False
+    )
+    resource_class: Mapped[ResourceClass] = mapped_column(
+        Enum(
+            ResourceClass,
+            name="resource_class",
+            values_callable=lambda values: [v.value for v in values],
+        ),
+        nullable=False,
+    )
+    worker_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    acquired_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    heartbeat_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class DocumentExtraction(Base):

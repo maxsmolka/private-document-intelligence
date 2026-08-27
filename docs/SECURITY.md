@@ -17,6 +17,9 @@ PDI has local authentication but is still intended for a private network or VPN,
 - knowledge proposals require verified persisted-text evidence and explicit review before canonical creation or linking
 - similar organization names never trigger an automatic merge; explicit merges retain aliases, references, and audit history
 - bounded worker attempts, polling, concurrency, job timeouts, and stale-claim recovery
+- administrator-only, CSRF-protected execution cancellation and diagnostics
+- cross-process PostgreSQL resource admission, OCR/local-AI leases, and lease heartbeats
+- execution journal metadata rejects secret/token/password/document-text keys
 - OCR subprocesses use explicit arguments, no shell, private temporary paths, captured output, cancellation cleanup, and a hard timeout
 - OCR is capped at 100 pages, 100 megapixels per page, 100 MiB derived output, one subprocess job, and one worker by default
 - original assets are immutable; derived files are atomically promoted under content-addressed keys

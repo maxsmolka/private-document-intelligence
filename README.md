@@ -57,7 +57,7 @@ cp .env.release.example .env.release
 docker compose --env-file .env.release -f compose.release.yaml up -d
 ```
 
-Open the configured HTTPS URL and complete `/setup`. The release Compose file pins the v1.1.2 backend and web images, exposes only the web port, uses persistent volumes, and defaults to secure cookies. Generate and protect the required TOTP encryption key, keep API/database access private, terminate TLS at a trusted proxy, and back up PostgreSQL and document storage together.
+Open the configured HTTPS URL and complete `/setup`. The release Compose file pins the v1.2.0 backend and web images, exposes only the web port, uses persistent volumes, and defaults to secure cookies. Generate and protect the required TOTP encryption key, keep API/database access private, terminate TLS at a trusted proxy, and back up PostgreSQL and document storage together.
 
 ## Development
 
@@ -88,6 +88,6 @@ Quality commands and contribution rules are in [CONTRIBUTING.md](CONTRIBUTING.md
 - [Operations](docs/OPERATIONS.md), [backup/restore](docs/BACKUP_RESTORE.md), and [cutover](docs/CUTOVER.md)
 - [Paperless migration](docs/PAPERLESS_MIGRATION.md) and [open export](docs/EXPORT.md)
 - [Architecture](docs/ARCHITECTURE.md) and [future Atlas boundary](docs/ATLAS_INTEGRATION.md)
-- [First-run setup](docs/FIRST_RUN_SETUP.md), [release process](docs/RELEASES.md), and [v1.1.2 notes](docs/releases/v1.1.2.md)
+- [First-run setup](docs/FIRST_RUN_SETUP.md), [release process](docs/RELEASES.md), and [v1.2.0 notes](docs/releases/v1.2.0.md)
 
 PDI is released under the [MIT License](LICENSE). Never attach private documents to public issues; report vulnerabilities through [the private process](SECURITY.md).

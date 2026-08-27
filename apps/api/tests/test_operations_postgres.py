@@ -1,5 +1,6 @@
 import os
 import shutil
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -7,7 +8,16 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from pdi.documents.models import Document, DocumentStatus, LifeArea
-from pdi.ingestion.models import DocumentAsset, DocumentAssetKind, DocumentExtraction
+from pdi.execution.specification import ResourceClass, TaskPriority, TaskType
+from pdi.ingestion.models import (
+    DocumentAsset,
+    DocumentAssetKind,
+    DocumentExtraction,
+    ExecutionResourceLease,
+    IngestionJob,
+    IngestionJobEvent,
+    IngestionJobState,
+)
 from pdi.ingestion.versions import create_extraction_version
 from pdi.operations.backup import create_backup, restore_backup, verify_backup
 from pdi.search.service import rebuild_search_index, refresh_search_index, verify_search_index
@@ -99,6 +109,36 @@ async def test_real_postgresql_backup_fresh_restore_and_asset_hashes(
             identity_components={"document_sha256": digest},
         )
         document.canonical_extraction_id = canonical.id
+        job = IngestionJob(
+            document_id=document.id,
+            state=IngestionJobState.CLAIMED,
+            stage="extracting",
+            task_type=TaskType.DOCUMENT_INGESTION,
+            priority=TaskPriority.HIGH,
+            resource_class=ResourceClass.CPU_HEAVY,
+            claimed_by="backup-worker",
+            idempotency_key="backup-restore-execution-fixture",
+        )
+        session.add(job)
+        await session.flush()
+        event = IngestionJobEvent(
+            job_id=job.id,
+            from_state=IngestionJobState.QUEUED.value,
+            to_state=IngestionJobState.CLAIMED.value,
+            stage="extracting",
+            worker_id="backup-worker",
+            event_type="transition",
+            attempt=1,
+            event_metadata={"release": "1.2.0"},
+        )
+        lease = ExecutionResourceLease(
+            job_id=job.id,
+            resource_class=ResourceClass.CPU_HEAVY,
+            worker_id="backup-worker",
+            acquired_at=datetime.now(UTC),
+            heartbeat_at=datetime.now(UTC),
+        )
+        session.add_all([event, lease])
         await refresh_search_index(session, document, canonical)
         await session.commit()
         backup = tmp_path / "backup"
@@ -141,6 +181,17 @@ async def test_real_postgresql_backup_fresh_restore_and_asset_hashes(
             assert restored.canonical_extraction_id == canonical.id
             restored_legacy = next(item for item in extractions if item.id == legacy.id)
             assert restored_legacy.source_provenance["paperless_document_id"] == "10"
+            restored_job = await session.scalar(select(IngestionJob))
+            assert restored_job is not None
+            assert restored_job.id == job.id
+            assert restored_job.priority == TaskPriority.HIGH
+            assert restored_job.resource_class == ResourceClass.CPU_HEAVY
+            restored_event = await session.scalar(select(IngestionJobEvent))
+            assert restored_event is not None
+            assert restored_event.event_metadata == {"release": "1.2.0"}
+            restored_lease = await session.scalar(select(ExecutionResourceLease))
+            assert restored_lease is not None
+            assert restored_lease.worker_id == "backup-worker"
             assert (await verify_search_index(session)).stale == 0
             await rebuild_search_index(session)
             assert (await verify_search_index(session)).stale == 0

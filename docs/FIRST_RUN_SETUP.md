@@ -1,6 +1,6 @@
 # First-run setup
 
-PDI v1.1.2 supports a browser bootstrap for a freshly migrated database with zero users. Start the stack, open the configured PDI URL, create the first administrator, optionally enable TOTP, save recovery codes, and continue into the normal application. The existing `pdi user create USERNAME` command remains the headless and automation alternative.
+PDI v1.2.0 retains the browser bootstrap for a freshly migrated database with zero users. Start the stack, open the configured PDI URL, create the first administrator, optionally enable TOTP, save recovery codes, and continue into the normal application. The existing `pdi user create USERNAME` command remains the headless and automation alternative.
 
 ## Authoritative state and API
 
