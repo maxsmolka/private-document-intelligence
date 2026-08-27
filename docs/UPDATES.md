@@ -29,7 +29,7 @@ Remove `--dry-run` only after reviewing the output. The executor validates the e
 
 Preparation progresses through `planned → preflight → backup → draining → awaiting_execution`. Host execution progresses through `pulling → installing → migrating → starting → verifying → completed`. Cancellation is safe only while planned or awaiting execution. A failure before migration restores the prior managed overlay and leaves maintenance mode. A failure after migration becomes `rollback_required`; maintenance remains enabled and the operator must use the linked backup.
 
-On application restart, interrupted preparation is marked failed. An interrupted deployment stage is never replayed blindly: it becomes rollback-required. An awaiting-execution plan remains awaiting the explicit operator command.
+On application restart, interrupted preparation is marked failed. A deployment stage owned by a live host executor is protected by a durable, expiring lease and remains under that executor's control. An expired deployment lease is never replayed blindly: the run becomes rollback-required. An awaiting-execution plan remains awaiting the explicit operator command.
 
 The established manual digest-pinned update remains supported. Never use `latest`, never proceed without a fresh verified backup, and never assume Alembic downgrade is a safe rollback. Checking is manual by default and may be disabled. Automatic installation is not implemented.
 
