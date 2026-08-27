@@ -2,6 +2,26 @@
 
 All notable changes are documented here. PDI follows Semantic Versioning.
 
+## [1.3.0] - 2026-08-28
+
+### Added
+
+- Add verified release discovery, immutable release manifests, deterministic update plans, blocking preflight, run-linked coordinated backups, maintenance/drain mode, and an audited update history.
+- Add a constrained host-side deployment executor that pins the official backend and web images by digest, verifies OCI version/revision identity, runs migrations, and blocks completion on readiness, search, storage, and execution-state checks.
+- Add an administrator update view while keeping installation explicitly operator-triggered and the main API isolated from Docker access.
+
+### Reliability and security
+
+- Persist every update state transition before returning it and guard the host executor with a durable, expiring database lease so API startup cannot misclassify live execution as abandoned.
+- Never replay an interrupted destructive stage automatically; post-migration interruption requires coordinated backup restore, while pre-installation failure leaves the current release usable.
+- Keep prerelease discovery disabled by default, reject API-token update control, retain CSRF protection, sanitize failures, and restrict the helper to the `pdi` project, known services, and official image repositories.
+
+### Qualification
+
+- Qualify the one-time v1.2.0 bootstrap and a subsequent manager-controlled immutable RC5→RC6 update in disposable infrastructure.
+- Verify backup linkage, exact digests and OCI labels, schema `20260828_0015`, a clean 12-event journal without recovery replay, full-stack restart durability, session continuity, document identity, readiness, search, and storage reconciliation.
+- Cover backup, drain, pull, digest/revision, migration, startup, readiness, search, and storage failures plus browser disconnect and helper/API restart behavior.
+
 ## [1.2.0] - 2026-08-27
 
 ### Added
@@ -100,6 +120,7 @@ All notable changes are documented here. PDI follows Semantic Versioning.
 - Local Argon2id accounts, revocable sessions and API tokens, CSRF protection, upload validation, bounded OCR, non-root containers, and privacy-safe logging.
 
 [1.2.0]: https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.2.0
+[1.3.0]: https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.3.0
 [1.1.2]: https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.1.2
 [1.1.0]: https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.1.0
 [1.0.2]: https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.0.2
