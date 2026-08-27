@@ -10,7 +10,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY . .
 ARG NEXT_PUBLIC_PDI_API_URL=http://localhost:8000
-ARG PDI_VERSION=1.1.2
+ARG PDI_VERSION=1.2.0
 ARG PDI_REVISION=unknown
 ARG PDI_BUILD_TIME=unknown
 ENV NEXT_PUBLIC_PDI_API_URL=$NEXT_PUBLIC_PDI_API_URL \
@@ -19,7 +19,7 @@ ENV NEXT_PUBLIC_PDI_API_URL=$NEXT_PUBLIC_PDI_API_URL \
 RUN npm run lint && npm run build
 
 FROM node:22-alpine AS runtime
-ARG PDI_VERSION=1.1.2
+ARG PDI_VERSION=1.2.0
 ARG PDI_REVISION=unknown
 ARG PDI_BUILD_TIME=unknown
 ARG PDI_SOURCE=https://github.com/maxsmolka/private-document-intelligence

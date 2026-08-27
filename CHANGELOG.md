@@ -2,6 +2,20 @@
 
 All notable changes are documented here. PDI follows Semantic Versioning.
 
+## [1.2.0] - 2026-08-27
+
+### Added
+
+- Add deterministic priority scheduling with starvation aging and resource-aware admission.
+- Add database-backed cross-worker resource limits, durable OCR/local-AI leases, cooperative cancellation, explicit execution timeouts, failure classes, bounded retry policy, and lightweight predecessor dependencies.
+- Add a sanitized execution journal, administrator diagnostics, exact queue/resource counters, executor capability modeling, and resource-aware benchmarks.
+
+### Architecture and operations
+
+- Keep PostgreSQL authoritative for execution state and retain the local worker as the default executor without integrating Compute Core.
+- Add forward-only Alembic migration `20260826_0013`; existing PDI data is preserved and no document reindex is required.
+- Require a verified pre-upgrade backup for operational rollback; restore that backup rather than starting v1.1.2 containers against schema 0013.
+
 ## [1.1.2] - 2026-08-26
 
 ### Added
@@ -85,8 +99,9 @@ All notable changes are documented here. PDI follows Semantic Versioning.
 
 - Local Argon2id accounts, revocable sessions and API tokens, CSRF protection, upload validation, bounded OCR, non-root containers, and privacy-safe logging.
 
-[1.1.0]: https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.1.0
+[1.2.0]: https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.2.0
 [1.1.2]: https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.1.2
+[1.1.0]: https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.1.0
 [1.0.2]: https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.0.2
 [1.0.1]: https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.0.1
 [1.0.0]: https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.0.0

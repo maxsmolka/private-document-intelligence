@@ -1,13 +1,24 @@
 import asyncio
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 
-from sqlalchemy import text
+from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from pdi.documents.models import Document, DocumentStatus, LifeArea
 from pdi.execution.specification import ResourceClass
-from pdi.ingestion.models import DocumentExtraction, IngestionJob
-from pdi.ingestion.queue import acquire_resource_lease, claim_job, enqueue_document
+from pdi.ingestion.models import (
+    DocumentExtraction,
+    ExecutionResourceLease,
+    IngestionJob,
+    IngestionJobEvent,
+    IngestionJobState,
+)
+from pdi.ingestion.queue import (
+    acquire_resource_lease,
+    claim_job,
+    enqueue_document,
+    request_cancellation,
+)
 from pdi.knowledge.models import DatePrecision, EventType, Organization, TimelineEvent
 from pdi.search.service import refresh_search_index, search_documents
 
@@ -39,6 +50,48 @@ async def test_concurrent_postgres_claims_are_distinct(
     first, second = await asyncio.gather(claim("one"), claim("two"))
     assert first is not None and second is not None
     assert first.id != second.id
+
+
+async def test_concurrent_postgres_cancellation_is_idempotent(
+    postgres_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with postgres_factory() as session:
+        document = Document(
+            title="Concurrent cancellation",
+            original_filename="cancel.pdf",
+            mime_type="application/pdf",
+            file_size=10,
+            sha256="c" * 64,
+            storage_key="cancel.pdf",
+            status=DocumentStatus.INBOX,
+            life_area=LifeArea.OTHER,
+            source="test",
+        )
+        session.add(document)
+        job = await enqueue_document(session, document, 3)
+        await session.commit()
+        job_id = job.id
+        claimed = await claim_job(session, "worker")
+        assert claimed is not None and claimed.id == job_id
+
+    async def cancel(actor: str) -> IngestionJob | None:
+        async with postgres_factory() as session:
+            return await request_cancellation(session, job_id, actor=actor)
+
+    first, second = await asyncio.gather(cancel("one"), cancel("two"))
+    assert first is not None and second is not None
+    assert first.state == second.state == IngestionJobState.CANCEL_REQUESTED
+
+    async with postgres_factory() as session:
+        event_count = await session.scalar(
+            select(func.count())
+            .select_from(IngestionJobEvent)
+            .where(
+                IngestionJobEvent.job_id == job_id,
+                IngestionJobEvent.event_type == "cancel_requested",
+            )
+        )
+        assert event_count == 1
 
 
 async def test_postgres_admission_and_stage_leases_enforce_cross_worker_limits(
@@ -90,6 +143,29 @@ async def test_postgres_admission_and_stage_leases_enforce_cross_worker_limits(
 
     leases = await asyncio.gather(acquire(claimed[0].id, "one"), acquire(claimed[1].id, "two"))
     assert sorted(leases) == [False, True]
+
+    winner = claimed[leases.index(True)]
+    loser = claimed[leases.index(False)]
+    async with postgres_factory() as session:
+        await session.execute(
+            update(ExecutionResourceLease)
+            .where(ExecutionResourceLease.job_id == winner.id)
+            .values(heartbeat_at=datetime.now(UTC) - timedelta(minutes=10))
+        )
+        await session.commit()
+        loser_job = await session.get(IngestionJob, loser.id)
+        assert loser_job is not None
+        assert await acquire_resource_lease(
+            session,
+            loser_job,
+            worker_id="replacement",
+            resource_class=ResourceClass.OCR,
+            limit=1,
+            stale_seconds=1,
+        )
+        active_leases = list(await session.scalars(select(ExecutionResourceLease)))
+        assert len(active_leases) == 1
+        assert active_leases[0].job_id == loser.id
 
 
 async def test_postgres_fts_ranking_identifier_filter_and_gin_plan(

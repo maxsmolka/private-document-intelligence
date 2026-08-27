@@ -23,7 +23,7 @@ COPY tests ./tests
 CMD ["uv", "run", "pytest"]
 
 FROM python:3.13-slim-trixie AS runtime
-ARG PDI_VERSION=1.1.2
+ARG PDI_VERSION=1.2.0
 ARG PDI_REVISION=unknown
 ARG PDI_BUILD_TIME=unknown
 ARG PDI_SOURCE=https://github.com/maxsmolka/private-document-intelligence

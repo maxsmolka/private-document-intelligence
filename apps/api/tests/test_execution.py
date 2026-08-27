@@ -5,7 +5,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from pdi.auth.service import create_user
+from pdi.auth.service import ALL_SCOPES, create_api_token, create_user
 from pdi.core.config import Settings
 from pdi.documents.models import Document, DocumentStatus, LifeArea
 from pdi.execution.executor import LOCAL_EXECUTOR_CAPABILITIES
@@ -268,6 +268,12 @@ async def test_execution_control_requires_admin_and_never_exposes_event_secrets(
     async with session_factory() as session:
         await create_user(session, "exec-admin", password, UserRole.ADMIN)
         await create_user(session, "exec-reader", password, UserRole.READ_ONLY)
+        _, admin_token = await create_api_token(
+            session,
+            username="exec-admin",
+            name="execution-boundary-test",
+            scopes=ALL_SCOPES,
+        )
         document = make_document(30)
         session.add(document)
         job = await enqueue_document(session, document, 3)
@@ -307,3 +313,11 @@ async def test_execution_control_requires_admin_and_never_exposes_event_secrets(
         headers={"x-csrf-token": reader_csrf},
     )
     assert denied.status_code == 403
+
+    token_headers = {"authorization": f"Bearer {admin_token}"}
+    assert (
+        await auth_client.get("/api/v1/execution/metrics", headers=token_headers)
+    ).status_code == 403
+    assert (
+        await auth_client.post(f"/api/v1/execution/jobs/{job_id}/cancel", headers=token_headers)
+    ).status_code == 403
