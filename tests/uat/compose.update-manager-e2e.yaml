@@ -1,0 +1,12 @@
+services:
+  postgres:
+    ports:
+      - "15432:5432"
+
+  api:
+    environment:
+      PDI_CORS_ORIGINS: '["http://localhost:13100"]'
+      PDI_UPDATE_ALLOW_PRERELEASE: "true"
+      PDI_UPDATE_BACKEND_DIGEST: ${PDI_UPDATE_BACKEND_DIGEST:?set an exact backend digest}
+      PDI_UPDATE_WEB_DIGEST: ${PDI_UPDATE_WEB_DIGEST:?set an exact web digest}
+      PDI_UPDATE_EXPECTED_SCHEMA: ${PDI_UPDATE_EXPECTED_SCHEMA:?set the expected schema}
