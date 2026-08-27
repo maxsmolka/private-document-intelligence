@@ -87,7 +87,7 @@ class Settings(BaseSettings):
     update_drain_timeout_seconds: int = Field(default=300, ge=0, le=3600)
     update_backend_digest: str | None = None
     update_web_digest: str | None = None
-    update_expected_schema: str = "20260827_0014"
+    update_expected_schema: str = "20260828_0015"
     update_deployment_type: Literal["operator_cli"] = "operator_cli"
 
     @model_validator(mode="after")

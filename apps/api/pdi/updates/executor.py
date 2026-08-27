@@ -3,7 +3,9 @@ import json
 import os
 import re
 import time
+import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Protocol
 
@@ -14,7 +16,7 @@ from pdi.auth.service import audit_event
 from pdi.core.config import Settings
 from pdi.ingestion.models import ExecutionResourceLease, IngestionJob
 from pdi.updates.models import UpdateEvent, UpdateRun, UpdateState
-from pdi.updates.service import ACTIVE_JOB_STATES, set_maintenance
+from pdi.updates.service import ACTIVE_JOB_STATES, executor_lease_active, set_maintenance
 from pdi.updates.state import transition
 
 BACKEND_IMAGE = "ghcr.io/maxsmolka/private-document-intelligence/backend"
@@ -177,6 +179,28 @@ class ComposeDeploymentExecutor:
             raise ValueError("Previous immutable image digests are missing")
         return validate_current_overlay(self.deployment.managed_overlay, run)
 
+    def lease_expiry(self) -> datetime:
+        return datetime.now(UTC) + timedelta(seconds=max(self.command_timeout, 60) + 120)
+
+    async def claim_executor_lease(self, session: AsyncSession, run: UpdateRun) -> uuid.UUID:
+        if executor_lease_active(run):
+            raise ValueError("Update execution is already leased by another helper")
+        lease_id = uuid.uuid4()
+        run.executor_lease_id = lease_id
+        run.executor_lease_expires_at = self.lease_expiry()
+        session.add(run)
+        await session.commit()
+        return lease_id
+
+    async def renew_executor_lease(
+        self, session: AsyncSession, run: UpdateRun, lease_id: uuid.UUID
+    ) -> None:
+        if run.executor_lease_id != lease_id:
+            raise DeploymentExecutionError("EXECUTOR_FAILED", "Deployment executor lease was lost")
+        run.executor_lease_expires_at = self.lease_expiry()
+        session.add(run)
+        await session.commit()
+
     async def dry_run(self, run: UpdateRun) -> dict[str, object]:
         await self.validate_plan(run)
         await self.command("config", "--quiet", limit_seconds=60)
@@ -194,6 +218,7 @@ class ComposeDeploymentExecutor:
 
     async def execute(self, session: AsyncSession, settings: Settings, run: UpdateRun) -> UpdateRun:
         previous_overlay = await self.validate_plan(run)
+        lease_id = await self.claim_executor_lease(session, run)
         backend_image = exact_image(BACKEND_IMAGE, run.target_backend_digest)
         web_image = exact_image(WEB_IMAGE, run.target_web_digest)
         migration_started = False
@@ -205,7 +230,9 @@ class ComposeDeploymentExecutor:
             await self.docker_stage(
                 "PULL_FAILED", "Backend image pull failed", "pull", backend_image
             )
+            await self.renew_executor_lease(session, run, lease_id)
             await self.docker_stage("PULL_FAILED", "Web image pull failed", "pull", web_image)
+            await self.renew_executor_lease(session, run, lease_id)
             for image in (backend_image, web_image):
                 inspected = await self.docker_stage(
                     "PULL_FAILED",
@@ -270,6 +297,7 @@ class ComposeDeploymentExecutor:
             transition(session, run, UpdateState.INSTALLING, event_type="deployment_pinned")
             await session.commit()
             stop_attempted = True
+            await self.renew_executor_lease(session, run, lease_id)
             await self.compose_stage(
                 "INSTALL_FAILED",
                 "PDI application services could not be stopped",
@@ -281,6 +309,7 @@ class ComposeDeploymentExecutor:
             await session.commit()
             if run.migration_required:
                 migration_started = True
+                await self.renew_executor_lease(session, run, lease_id)
                 await self.compose_stage(
                     "MIGRATION_FAILED",
                     "Database migration failed",
@@ -293,6 +322,7 @@ class ComposeDeploymentExecutor:
                     "head",
                     post_migration=migration_started,
                 )
+            await self.renew_executor_lease(session, run, lease_id)
             current = await self.compose_stage(
                 "MIGRATION_FAILED",
                 "Database schema could not be verified",
@@ -313,6 +343,7 @@ class ComposeDeploymentExecutor:
                 )
             transition(session, run, UpdateState.STARTING, event_type="migration_completed")
             await session.commit()
+            await self.renew_executor_lease(session, run, lease_id)
             await self.compose_stage(
                 "START_FAILED",
                 "PDI services did not become healthy",
@@ -327,6 +358,7 @@ class ComposeDeploymentExecutor:
             )
             transition(session, run, UpdateState.VERIFYING, event_type="services_started")
             await session.commit()
+            await self.renew_executor_lease(session, run, lease_id)
             ready = await self.compose_stage(
                 "READINESS_FAILED",
                 "Application readiness command failed",
@@ -345,6 +377,7 @@ class ComposeDeploymentExecutor:
                     post_migration=migration_started,
                 )
             if run.reindex_required:
+                await self.renew_executor_lease(session, run, lease_id)
                 await self.compose_stage(
                     "SEARCH_FAILED",
                     "Required search rebuild failed",
@@ -357,6 +390,7 @@ class ComposeDeploymentExecutor:
                     post_migration=migration_started,
                     limit_seconds=900,
                 )
+            await self.renew_executor_lease(session, run, lease_id)
             search = await self.compose_stage(
                 "SEARCH_FAILED",
                 "Search verification command failed",
@@ -375,6 +409,7 @@ class ComposeDeploymentExecutor:
                     "Search verification did not pass",
                     post_migration=migration_started,
                 )
+            await self.renew_executor_lease(session, run, lease_id)
             storage = await self.compose_stage(
                 "STORAGE_FAILED",
                 "Storage reconciliation command failed",
@@ -393,6 +428,7 @@ class ComposeDeploymentExecutor:
                     "Storage reconciliation did not pass",
                     post_migration=migration_started,
                 )
+            await self.renew_executor_lease(session, run, lease_id)
             version = await self.compose_stage(
                 "VERSION_MISMATCH",
                 "Backend version could not be verified",
@@ -429,6 +465,8 @@ class ComposeDeploymentExecutor:
                     post_migration=migration_started,
                 )
             run.schema_after = run.schema_target
+            run.executor_lease_id = None
+            run.executor_lease_expires_at = None
             transition(session, run, UpdateState.COMPLETED, event_type="update_completed")
             audit_event(
                 session,
@@ -486,6 +524,8 @@ class ComposeDeploymentExecutor:
                     )
             run.failure_code = error.code
             run.failure_message = str(error)[:500]
+            run.executor_lease_id = None
+            run.executor_lease_expires_at = None
             target = UpdateState.ROLLBACK_REQUIRED if error.post_migration else UpdateState.FAILED
             transition(session, run, target, event_type="update_failed", detail=error.code)
             audit_event(
