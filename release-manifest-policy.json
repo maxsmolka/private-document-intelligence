@@ -1,9 +1,9 @@
 {
-  "minimum_supported_version": "1.2.0",
-  "minimum_schema": "20260826_0013",
-  "target_schema": "20260828_0015",
+  "minimum_supported_version": "1.3.0",
+  "minimum_schema": "20260828_0015",
+  "target_schema": "20260828_0020",
   "migration_required": true,
-  "reindex_required": false,
+  "reindex_required": true,
   "backup_required": true,
   "rollback_mode": "restore_backup",
   "architectures": ["linux/amd64"]
