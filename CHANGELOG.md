@@ -18,12 +18,18 @@ All notable changes are documented here. PDI follows Semantic Versioning.
 - Preserve source files before acknowledging consume or migration success; reject changed immutable source assets and explicitly block unpreserved Paperless workflows.
 - Keep IMAP read-only, credentials file-backed, runtime settings allow-listed, review decisions proposal-scoped, and the main API isolated from Docker and host mutation.
 - Retain PostgreSQL as the authority for ingestion, execution, search, knowledge, reminders, settings, and update state; no broker, vector database, workflow engine, Atlas, or Compute Core dependency is added.
+- Keep the target-version update helper compatible with the v1.3 source schema until migrations complete, rebuild required search projections before readiness, deploy both new schedulers at exact digests, and persist adjacent audit stages with deterministic transaction boundaries.
 
 ### Upgrade
 
 - The final schema is `20260828_0020`. A direct v1.2.0 schema `20260826_0013` upgrade executes migrations 0014 through 0020 in order.
 - PDI v1.2.0 does not include the Controlled Update Manager. Adopt v1.3.0 first through the documented backup-first, digest-pinned manual bootstrap; subsequent installation of v1.4.0 is manager-controlled.
 - Rollback after migration requires restoring the coordinated pre-upgrade database and storage backup; image-only downgrade is not supported.
+
+### Qualification
+
+- Qualify the official v1.3.0→v1.4.0-rc.4 controlled update from a clean disposable stack, including a non-mutating dry run, exact target digests, schema 0015→0020, the ordered twelve-stage journal, search rebuild, storage reconciliation, and independent backup verification.
+- Verify full six-service restart durability, authentication continuity, unchanged document UUIDs and SHA-256 hashes, cleared maintenance/executor state, and zero missing or stale search/storage records.
 
 ## [1.3.0] - 2026-08-28
 
