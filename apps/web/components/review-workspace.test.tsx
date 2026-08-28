@@ -22,7 +22,7 @@ vi.mock("@/lib/api/documents", async (importOriginal) => ({
   rejectReview: mocks.rejectReview,
 }));
 
-import { ReviewWorkspace } from "@/components/review-workspace";
+import { rankMetadataProposals, ReviewWorkspace } from "@/components/review-workspace";
 
 function document(id: string, title: string): DocumentRecord {
   return {
@@ -33,11 +33,11 @@ function document(id: string, title: string): DocumentRecord {
   };
 }
 
-function proposal(id: string): MetadataProposal {
+function proposal(id: string, fieldName = "document_type", confidence = 0.95): MetadataProposal {
   return {
-    id, document_id: "doc-1", field_name: "document_type", proposed_value: "rental_contract",
-    normalized_value: "rental_contract", structured_value: null, source: "intelligence", provider: "deterministic",
-    intelligence_run_id: "run-1", confidence: 0.95,
+    id, document_id: "doc-1", field_name: fieldName, proposed_value: id,
+    normalized_value: id, structured_value: null, source: "intelligence", provider: "deterministic",
+    intelligence_run_id: "run-1", confidence,
     evidence: [{ page: 1, start: 0, end: 11, text: "Mietvertrag", verified: true }], evidence_verified: true,
     validation_notes: [], is_critical: false, status: "pending", created_at: "2026-01-01T00:00:00Z", confirmed_at: null,
   };
@@ -60,6 +60,21 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("ReviewWorkspace state synchronization", () => {
+  it("ranks actionable semantic facts ahead of weak generic values", () => {
+    const ranked = rankMetadataProposals([
+      proposal("generic", "other_amount", 0.99),
+      proposal("organization", "organization", 0.8),
+      proposal("deadline", "payment_due_date", 0.7),
+      proposal("total", "invoice_total", 0.9),
+    ]);
+
+    expect(ranked.map((item) => item.id)).toEqual([
+      "deadline",
+      "total",
+      "organization",
+      "generic",
+    ]);
+  });
   it("updates completion state, queue count, and navigation immediately after review", async () => {
     const data = fixtures();
     render(<ReviewWorkspace {...data} />);

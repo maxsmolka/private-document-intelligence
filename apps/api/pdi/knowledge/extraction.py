@@ -142,6 +142,11 @@ def metadata_candidates(run: IntelligenceRun) -> list[MetadataProposal]:
     return [proposal for proposal in run.proposals if proposal.evidence_verified]
 
 
+def metadata_kind(proposal: MetadataProposal) -> str:
+    structured = proposal.structured_value
+    return str(structured.get("kind", "")) if isinstance(structured, dict) else ""
+
+
 async def organization_candidates(session: AsyncSession, run: IntelligenceRun) -> list[Candidate]:
     candidates: list[Candidate] = []
     for proposal in metadata_candidates(run):
@@ -177,6 +182,8 @@ async def organization_candidates(session: AsyncSession, run: IntelligenceRun) -
 
 def inferred_contract_type(document: Document) -> ContractType:
     document_type = document.document_type or ""
+    if document_type == "rental_contract":
+        return ContractType.LEASE
     if document.life_area.value == "insurance" or "insurance" in document_type:
         return ContractType.INSURANCE
     if document.life_area.value == "work" or "employment" in document_type:
@@ -200,40 +207,55 @@ def contract_candidate(
         None,
     )
     document_type = document.document_type or proposed_document_type or ""
-    explicit_contract_evidence = bool(
-        re.search(
-            r"\b(?:Mietvertrag|Mietverhältnis|Versicherungsvertrag|Versicherungsbeginn|"
-            r"Vertragsbeginn|Versicherungsschein|Police|Altersvorsorgevertrag)\b",
-            extraction.text,
-            re.I,
-        )
+    explicit_match = re.search(
+        r"\b(?:Mietvertrag|Mietverhältnis|Versicherungsvertrag|Versicherungsbeginn|"
+        r"Vertragsbeginn|Vertragsende|Versicherungsschein|Police|Arbeitsvertrag|"
+        r"Altersvorsorgevertrag)\b",
+        extraction.text,
+        re.I,
+    )
+    contract_identifier = next(
+        (
+            item
+            for item in identifiers
+            if metadata_kind(item)
+            .casefold()
+            .startswith(("vertrag", "versicherungsschein", "police"))
+        ),
+        None,
     )
     contract_document = (
-        document_type
-        in {
-            "contract",
-            "insurance_policy",
-            "employment_document",
-            "pension_statement",
-        }
-        or explicit_contract_evidence
-        or (bool(identifiers) and document_type != "invoice")
+        document_type in {"contract", "rental_contract", "insurance_policy"}
+        or explicit_match is not None
+        or (
+            contract_identifier is not None
+            and document_type in {"insurance_notice", "insurance_statement", "pension_statement"}
+        )
     )
     if not contract_document:
         return None
-    identifier = identifiers[0] if identifiers else None
+    identifier = contract_identifier or (identifiers[0] if identifiers else None)
     product = next((item for item in proposals if item.field_name == "product_name"), None)
     contract_start = next((item for item in proposals if item.field_name == "contract_start"), None)
-    evidence = (
-        identifier.evidence
-        if identifier
-        else next((item.evidence for item in proposals if item.field_name == "document_type"), [])
-    )
+    if identifier:
+        evidence = identifier.evidence
+    elif explicit_match is not None:
+        evidence = [evidence_for(extraction, explicit_match.start(), explicit_match.end())]
+    else:
+        evidence = next(
+            (item.evidence for item in proposals if item.field_name == "document_type"), []
+        )
     payload = {
         "title": product.normalized_value if product else document.title,
         "contract_type": (
             ContractType.INSURANCE.value
-            if document_type in {"insurance_policy", "insurance_notice", "pension_statement"}
+            if document_type
+            in {
+                "insurance_policy",
+                "insurance_notice",
+                "insurance_statement",
+                "pension_statement",
+            }
             else inferred_contract_type(document).value
         ),
         "status": "unknown",
@@ -245,7 +267,7 @@ def contract_candidate(
             ContractDocumentType.POLICY.value
             if document_type == "insurance_policy"
             else ContractDocumentType.STATEMENT.value
-            if document_type == "pension_statement"
+            if document_type in {"pension_statement", "insurance_statement"}
             else ContractDocumentType.CONTRACT_DOCUMENT.value
         ),
     }

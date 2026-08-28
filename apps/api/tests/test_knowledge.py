@@ -621,6 +621,21 @@ async def test_invoice_without_deadline_creates_neither_deadline_nor_contract(
         )
 
 
+async def test_official_reference_identifier_does_not_create_contract(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with session_factory() as session:
+        document, extraction, run = await seed_run(session, "official-reference")
+        document.document_type = "official_letter"
+        document.life_area = LifeArea.PERSONAL
+        extraction.text = "Bezirksamt Mitte\nAktenzeichen: AZ-2026-44\nWiderspruch bis 12.08.2026"
+        extraction.pages = [extraction.text]
+        created = await generate_knowledge_proposals(
+            session, document=document, extraction=extraction, run=run
+        )
+        assert not any(item.proposal_type == KnowledgeProposalType.CONTRACT for item in created)
+
+
 @pytest.mark.parametrize("proposal_type", list(KnowledgeProposalType))
 async def test_every_pending_knowledge_proposal_can_be_rejected_without_verified_evidence(
     client: AsyncClient,

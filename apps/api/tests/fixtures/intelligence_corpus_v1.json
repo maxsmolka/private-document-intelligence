@@ -1,0 +1,176 @@
+[
+  {
+    "id": "invoice-explicit-total-and-deadline",
+    "text": "Beispiel Handel GmbH\nRechnung\nRechnungsnummer: RE-2026-1001\nRechnungsdatum: 20.08.2026\nZahlbar bis zum 01.09.2026\nGesamtbetrag: 123,45 EUR",
+    "expected": {
+      "document_type": "invoice",
+      "contract": false,
+      "organizations": ["Beispiel Handel GmbH"],
+      "identifiers": ["RE-2026-1001"],
+      "fields": ["invoice_date=2026-08-20", "payment_due_date=2026-09-01", "invoice_total=123.45 EUR"]
+    }
+  },
+  {
+    "id": "invoice-customer-number-is-not-contract",
+    "text": "Werkstatt Beispiel GmbH\nRechnung\nKundennummer: KD-88421\nRechnungsdatum: 03.08.2026\nBetrag: 49,90 EUR",
+    "expected": {
+      "document_type": "invoice",
+      "contract": false,
+      "organizations": ["Werkstatt Beispiel GmbH"],
+      "identifiers": ["KD-88421"],
+      "fields": ["invoice_date=2026-08-03", "other_amount=49.90 EUR"]
+    }
+  },
+  {
+    "id": "german-rental-contract",
+    "text": "Wohnraummietvertrag\nVermieter: Muster Hausverwaltung GmbH\nMieter: Max Mustermann\nMietobjekt: Lindenstraße 10, 10969 Berlin\nVertragsnummer: MV-2026-77\nMietverhältnis beginnt: 01.10.2026\nGrundmiete monatlich: 900,00 EUR\nBetriebskosten: 180,00 EUR\nStellplatz: 60,00 EUR\nGesamtmiete: 1.140,00 EUR\nMietsicherheit: 2.700,00 EUR\nKündigung spätestens 30.06.2027",
+    "expected": {
+      "document_type": "rental_contract",
+      "contract": true,
+      "organizations": ["Muster Hausverwaltung GmbH"],
+      "identifiers": ["MV-2026-77"],
+      "fields": [
+        "contract_start=2026-10-01",
+        "cancellation_deadline=2027-06-30",
+        "monthly_rent=900.00 EUR",
+        "service_charges=180.00 EUR",
+        "parking_fee=60.00 EUR",
+        "total_rent=1140.00 EUR",
+        "deposit=2700.00 EUR",
+        "landlord_name=Muster Hausverwaltung GmbH",
+        "tenant_name=Max Mustermann",
+        "rental_property_address=Lindenstraße 10, 10969 Berlin"
+      ]
+    }
+  },
+  {
+    "id": "pension-current-values-not-scenarios",
+    "text": "Muster Leben Versicherung AG\nJährliche Wertmitteilung RiesterRente STRATEGIE PLUS\nAusstellungsdatum: 28.02.2022\nWertmitteilung zum 31.12.2021\nVertragsnummer: RR-2020-12345\nVersicherungsbeginn: 01.12.2020\nGeplanter Rentenbeginn: 01.05.2055\nMonatlicher Beitrag: 160,42 EUR\nAltersvorsorgevermögen: 8.789,80 EUR\nKündigungswert: 8.689,80 EUR\nModellrechnung bei 4 %: 24.000,00 EUR",
+    "expected": {
+      "document_type": "pension_statement",
+      "contract": true,
+      "organizations": ["Muster Leben Versicherung AG"],
+      "identifiers": ["RR-2020-12345"],
+      "fields": [
+        "document_date=2022-02-28",
+        "valuation_date=2021-12-31",
+        "contract_start=2020-12-01",
+        "planned_retirement_start=2055-05-01",
+        "monthly_contribution=160.42 EUR",
+        "retirement_assets=8789.80 EUR",
+        "cancellation_value=8689.80 EUR",
+        "product_name=RiesterRente STRATEGIE PLUS"
+      ]
+    }
+  },
+  {
+    "id": "insurance-statement",
+    "text": "Nordstern Versicherung AG\nJahresmitteilung zu Ihrer Versicherung\nVertragsnummer: V-9911\nDokumentdatum: 05.01.2026\nJahresbeitrag: 389,00 EUR",
+    "expected": {
+      "document_type": "insurance_statement",
+      "contract": true,
+      "organizations": ["Nordstern Versicherung AG"],
+      "identifiers": ["V-9911"],
+      "fields": ["document_date=2026-01-05", "premium=389.00 EUR"]
+    }
+  },
+  {
+    "id": "bank-statement-period-and-balance",
+    "text": "Beispielbank AG\nKontoauszug\nZeitraum von 01.07.2026\nZeitraum bis 31.07.2026\nSchlusssaldo: 2.345,67 EUR",
+    "expected": {
+      "document_type": "bank_statement",
+      "contract": false,
+      "organizations": ["Beispielbank AG"],
+      "fields": ["statement_period_start=2026-07-01", "statement_period_end=2026-07-31", "account_balance=2345.67 EUR"]
+    }
+  },
+  {
+    "id": "official-notice-response-deadline",
+    "text": "Bezirksamt Mitte\nAmtlicher Bescheid\nAktenzeichen: AZ-2026-44\nBescheiddatum: 12.07.2026\nWiderspruch bis 12.08.2026",
+    "expected": {
+      "document_type": "official_notice",
+      "contract": false,
+      "identifiers": ["AZ-2026-44"],
+      "fields": ["document_date=2026-07-12", "event_date=2026-08-12"]
+    }
+  },
+  {
+    "id": "correspondence-with-subject",
+    "text": "Betreff: Rückfrage zu Ihren Unterlagen\nSehr geehrte Damen und Herren,\nIhr Schreiben vom 01.08.2026 haben wir erhalten.",
+    "expected": {
+      "document_type": "correspondence",
+      "contract": false,
+      "fields": ["event_date=2026-08-01"]
+    }
+  },
+  {
+    "id": "service-subscription-contract",
+    "text": "Muster Dienste GmbH\nServicevertrag\nVertragsnummer: SV-2026-19\nVertragsbeginn: 01.09.2026\nVertragsende: 31.08.2027\nMonatliches Entgelt: 19,90 EUR",
+    "expected": {
+      "document_type": "contract",
+      "contract": true,
+      "organizations": ["Muster Dienste GmbH"],
+      "identifiers": ["SV-2026-19"],
+      "fields": ["contract_start=2026-09-01", "contract_end=2027-08-31", "other_amount=19.90 EUR"]
+    }
+  },
+  {
+    "id": "receipt",
+    "text": "Markt Einkauf GmbH\nKassenbon\nDatum: 20.08.2026\nGesamtbetrag: 27,45 EUR",
+    "expected": {
+      "document_type": "receipt",
+      "contract": false,
+      "organizations": ["Markt Einkauf GmbH"],
+      "fields": ["document_date=2026-08-20", "invoice_total=27.45 EUR"]
+    }
+  },
+  {
+    "id": "warranty",
+    "text": "Gerätebau Beispiel GmbH\nGarantieschein\nSeriennummer GX-100\nGültig ab 01.06.2026",
+    "expected": {
+      "document_type": "warranty",
+      "contract": false,
+      "organizations": ["Gerätebau Beispiel GmbH"],
+      "fields": ["effective_date=2026-06-01"]
+    }
+  },
+  {
+    "id": "certificate",
+    "text": "Bildungswerk Beispiel e. V.\nBescheinigung\nAusstellungsdatum: 30.06.2026",
+    "expected": {
+      "document_type": "certificate",
+      "contract": false,
+      "organizations": ["Bildungswerk Beispiel e. V."],
+      "fields": ["document_date=2026-06-30"]
+    }
+  },
+  {
+    "id": "employment-payslip-not-contract",
+    "text": "Beispiel Arbeit GmbH\nGehaltsabrechnung\nDatum: 31.07.2026\nAuszahlungsbetrag: 2.500,00 EUR",
+    "expected": {
+      "document_type": "employment_document",
+      "contract": false,
+      "organizations": ["Beispiel Arbeit GmbH"],
+      "fields": ["document_date=2026-07-31", "other_amount=2500.00 EUR"]
+    }
+  },
+  {
+    "id": "tax-notice",
+    "text": "Finanzamt Berlin\nSteuerbescheid\nSteuernummer: 12/345/67890\nBescheiddatum: 12.07.2026\nErstattung: 212,00 EUR",
+    "expected": {
+      "document_type": "tax_document",
+      "contract": false,
+      "identifiers": ["12/345/67890"],
+      "fields": ["document_date=2026-07-12", "refund=212.00 EUR"]
+    }
+  },
+  {
+    "id": "unstructured-note",
+    "text": "Notizen für den privaten Gebrauch ohne formale Metadaten oder Geldwerte.",
+    "expected": {
+      "document_type": null,
+      "contract": false,
+      "fields": []
+    }
+  }
+]
