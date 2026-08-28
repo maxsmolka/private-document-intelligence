@@ -91,6 +91,22 @@ services:
     stop_grace_period: 330s
     restart: unless-stopped
 
+  backup-scheduler:
+    image: pdi-backend:local
+    command: ["pdi-backup-scheduler"]
+    environment:
+      <<: *backend-environment
+      PDI_BACKUP_PATH: /backups
+    volumes:
+      - document_storage:/data/documents
+      - backup_data:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
   web:
     build:
       context: ./apps/web

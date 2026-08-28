@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from pdi.administration.dependencies import get_effective_settings
 from pdi.auth.router import require_auth
 from pdi.auth.service import (
     ALL_SCOPES,
@@ -26,13 +27,13 @@ from pdi.auth.service import (
     verify_password,
     verify_totp,
 )
-from pdi.core.config import Settings, get_settings
+from pdi.core.config import Settings
 from pdi.core.database import get_session
 from pdi.operations.models import ApiToken, LocalUser, RecoveryCode, UserRole, UserSession
 
 router = APIRouter(prefix="/api/v1/account", tags=["account security"])
 Session = Annotated[AsyncSession, Depends(get_session)]
-AppSettings = Annotated[Settings, Depends(get_settings)]
+AppSettings = Annotated[Settings, Depends(get_effective_settings)]
 CurrentPrincipal = Annotated[Principal, Depends(require_auth)]
 
 

@@ -6,7 +6,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from pdi.core.config import Settings, get_settings
+from pdi.administration.dependencies import get_effective_settings
+from pdi.core.config import Settings
 from pdi.core.database import get_session
 from pdi.core.schema import database_revision
 from pdi.updates.service import latest_cached_release
@@ -14,7 +15,7 @@ from pdi.version import PDI_VERSION
 
 router = APIRouter(prefix="/api/v1/system", tags=["system information"])
 Session = Annotated[AsyncSession, Depends(get_session)]
-AppSettings = Annotated[Settings, Depends(get_settings)]
+AppSettings = Annotated[Settings, Depends(get_effective_settings)]
 _VERSION_CACHE: dict[tuple[str, ...], str | None] = {}
 
 

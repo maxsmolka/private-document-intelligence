@@ -7,7 +7,8 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from pdi.core.config import Settings, get_settings
+from pdi.administration.dependencies import get_effective_settings
+from pdi.core.config import Settings
 from pdi.core.database import get_session
 from pdi.documents.models import DocumentStatus, LifeArea
 from pdi.documents.schemas import DocumentList, DocumentRead, DocumentUploadResult
@@ -41,7 +42,7 @@ from pdi.storage.dependencies import get_storage
 router = APIRouter(prefix="/api/v1/documents", tags=["documents"])
 Session = Annotated[AsyncSession, Depends(get_session)]
 Storage = Annotated[StorageBackend, Depends(get_storage)]
-AppSettings = Annotated[Settings, Depends(get_settings)]
+AppSettings = Annotated[Settings, Depends(get_effective_settings)]
 
 
 @router.post("", response_model=DocumentUploadResult, status_code=status.HTTP_201_CREATED)

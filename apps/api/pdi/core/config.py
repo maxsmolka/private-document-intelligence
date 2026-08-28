@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     ocr_provider: Literal["ocrmypdf"] = "ocrmypdf"
     ocr_command_timeout: int = Field(default=180, ge=10)
     ocr_language: str = "deu+eng"
+    ocr_minimum_characters_per_page: int = Field(default=40, ge=10, le=500)
     ocr_max_pages: int = Field(default=100, ge=1, le=1000)
     ocr_max_image_mpixels: float = Field(default=100, gt=0, le=1000)
     ocr_force_rotation: bool = True
@@ -49,6 +50,7 @@ class Settings(BaseSettings):
     intelligence_max_input_characters: int = Field(default=100_000, ge=1_000)
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5:7b"
+    ollama_allowed_models: list[str] = ["qwen2.5:7b"]
     auth_enabled: bool = False
     setup_enabled: bool = True
     session_ttl_seconds: int = Field(default=43_200, ge=300, le=2_592_000)
@@ -79,6 +81,10 @@ class Settings(BaseSettings):
     paperless_token_file: Path | None = None
     paperless_verify_tls: bool = True
     backup_path: Path = Path("./backups")
+    backup_schedule_enabled: bool = False
+    backup_interval_hours: int = Field(default=24, ge=1, le=168)
+    backup_retention_count: int = Field(default=7, ge=1, le=365)
+    backup_schedule_poll_seconds: int = Field(default=300, ge=30, le=3600)
     update_channel: Literal["disabled", "manual", "weekly"] = "manual"
     update_allow_prerelease: bool = False
     update_github_api_url: str = (
@@ -91,7 +97,7 @@ class Settings(BaseSettings):
     update_drain_timeout_seconds: int = Field(default=300, ge=0, le=3600)
     update_backend_digest: str | None = None
     update_web_digest: str | None = None
-    update_expected_schema: str = "20260828_0017"
+    update_expected_schema: str = "20260828_0018"
     update_deployment_type: Literal["operator_cli"] = "operator_cli"
 
     @model_validator(mode="after")
@@ -108,6 +114,13 @@ class Settings(BaseSettings):
             raise ValueError("Execution resource limits must be between 1 and 64")
         if self.execution_heartbeat_seconds * 2 >= self.worker_job_timeout:
             raise ValueError("Execution heartbeat must be less than half the stale-job timeout")
+        if not self.ollama_allowed_models:
+            raise ValueError("At least one allowed Ollama model must be configured")
+        if (
+            self.intelligence_provider == "ollama"
+            and self.ollama_model not in self.ollama_allowed_models
+        ):
+            raise ValueError("The selected Ollama model is not in the deployment allow-list")
         return self
 
 

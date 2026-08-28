@@ -6,10 +6,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from pdi.administration.dependencies import get_effective_settings
 from pdi.auth.admin import require_admin
 from pdi.auth.router import require_auth
 from pdi.auth.service import Principal, audit_event
-from pdi.core.config import Settings, get_settings
+from pdi.core.config import Settings
 from pdi.core.database import get_session
 from pdi.external.schemas import (
     IngestionRetryResult,
@@ -26,7 +27,7 @@ from pdi.operations.models import (
 
 router = APIRouter(prefix="/api/v1/ingestion/sources", tags=["ingestion sources"])
 Session = Annotated[AsyncSession, Depends(get_session)]
-AppSettings = Annotated[Settings, Depends(get_settings)]
+AppSettings = Annotated[Settings, Depends(get_effective_settings)]
 CurrentPrincipal = Annotated[Principal, Depends(require_auth)]
 
 

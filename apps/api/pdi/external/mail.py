@@ -12,8 +12,10 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from pdi.administration.service import effective_settings
 from pdi.core.config import Settings, get_settings
 from pdi.core.database import session_factory
+from pdi.core.logging import configure_logging
 from pdi.documents.service import ingest_path, safe_filename
 from pdi.external.sources import ensure_source, record_poll_failure, record_poll_success
 from pdi.operations.models import ExternalIngestion, ExternalIngestionStatus, IngestionSource
@@ -278,11 +280,17 @@ async def poll_once(settings: Settings) -> dict[str, int]:
 
 
 async def run() -> None:
-    settings = get_settings()
-    if not settings.mail_enabled:
+    deployment_settings = get_settings()
+    async with session_factory() as session:
+        startup_settings = await effective_settings(session, deployment_settings)
+    configure_logging(startup_settings.log_level)
+    if not deployment_settings.mail_enabled:
         raise RuntimeError("Mail ingestion is disabled")
     while True:
+        settings = deployment_settings
         try:
+            async with session_factory() as session:
+                settings = await effective_settings(session, deployment_settings)
             report = await poll_once(settings)
             logger.info("mail_poll_completed", extra=report)
         except Exception as exc:

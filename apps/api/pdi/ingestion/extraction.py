@@ -85,6 +85,9 @@ def decide_ocr(pages: list[str], minimum_characters_per_page: int = 40) -> OcrDe
 
 
 class NativePdfProvider:
+    def __init__(self, minimum_characters_per_page: int = 40) -> None:
+        self.minimum_characters_per_page = minimum_characters_per_page
+
     def supports(self, mime_type: str) -> bool:
         return mime_type == "application/pdf"
 
@@ -101,7 +104,7 @@ class NativePdfProvider:
             normalization_ms = (time.perf_counter() - normalization_started) * 1000
         except Exception as exc:
             raise ExtractionError("PDF parsing failed") from exc
-        decision = decide_ocr(pages)
+        decision = decide_ocr(pages, self.minimum_characters_per_page)
         warnings = [decision.reason] if decision.required else []
         return ExtractionResult(
             text=normalize_text("\n\n".join(pages)),
@@ -318,11 +321,14 @@ async def extract_document(
     ocr_max_pages: int = 100,
     ocr_max_image_mpixels: float = 100,
     ocr_force_rotation: bool = True,
+    ocr_minimum_characters_per_page: int = 40,
     work_dir: Path | None = None,
     native_result: ExtractionResult | None = None,
 ) -> ExtractionResult:
     if mime_type == "application/pdf":
-        native = native_result or await NativePdfProvider().extract(path, mime_type)
+        native = native_result or await NativePdfProvider(ocr_minimum_characters_per_page).extract(
+            path, mime_type
+        )
         if not native.metadata.get("requires_ocr") or not ocr_enabled:
             return native
         if ocr_provider != "ocrmypdf":

@@ -1,5 +1,8 @@
 # Operations
 
+Runtime administration and configuration ownership are documented in
+[`SETTINGS_ADMINISTRATION.md`](SETTINGS_ADMINISTRATION.md).
+
 ## Execution diagnostics
 
 Administrators can inspect `/api/v1/execution/metrics`, `/api/v1/execution/jobs/{id}` and the corresponding `/journal`. Cancellation is available through `POST /api/v1/execution/jobs/{id}/cancel` and is cooperative. Read-only users and API tokens cannot mutate execution state.

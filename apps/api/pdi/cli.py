@@ -11,6 +11,7 @@ from pathlib import Path
 
 from sqlalchemy import func, select
 
+from pdi.administration.service import effective_settings
 from pdi.auth.bootstrap import bootstrap_first_admin, setup_required
 from pdi.auth.service import ALL_SCOPES, READ_SCOPES, audit_event, create_api_token, create_user
 from pdi.core.config import get_settings
@@ -212,11 +213,12 @@ async def run_token(arguments: argparse.Namespace) -> None:
 
 
 async def run_operations(arguments: argparse.Namespace) -> None:
-    settings = get_settings()
+    deployment_settings = get_settings()
     if arguments.command == "backup" and arguments.backup_command == "verify":
         output(verify_backup(arguments.path))
         return
     async with session_factory() as session:
+        settings = await effective_settings(session, deployment_settings)
         if arguments.command == "backup":
             output(
                 await create_backup(
@@ -243,7 +245,7 @@ async def run_operations(arguments: argparse.Namespace) -> None:
 
 
 async def run_update(arguments: argparse.Namespace) -> None:
-    settings = get_settings()
+    deployment_settings = get_settings()
     deployment = ComposeDeployment(
         compose_files=tuple(arguments.compose_file),
         env_file=arguments.env_file,
@@ -251,6 +253,7 @@ async def run_update(arguments: argparse.Namespace) -> None:
     )
     executor = ComposeDeploymentExecutor(deployment)
     async with session_factory() as session:
+        settings = await effective_settings(session, deployment_settings)
         run = await session.get(UpdateRun, arguments.run_id)
         if run is None:
             raise ValueError("Update run not found")
