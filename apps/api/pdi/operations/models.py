@@ -5,6 +5,7 @@ from typing import Any
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Boolean,
     DateTime,
     Enum,
@@ -256,7 +257,7 @@ class ExternalIngestion(Base):
     source_key: Mapped[str] = mapped_column(String(500), nullable=False)
     content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     observed_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    observed_mtime_ns: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    observed_mtime_ns: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     stable_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[ExternalIngestionStatus] = mapped_column(
         Enum(
