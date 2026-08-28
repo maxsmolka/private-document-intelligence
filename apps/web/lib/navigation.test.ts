@@ -18,6 +18,7 @@ describe("activeNavigationRoute", () => {
     ["timeline", "/timeline", "/timeline"],
     ["upcoming", "/upcoming", "/upcoming"],
     ["account settings", "/settings/account", "/settings/account"],
+    ["administration settings", "/settings/administration", "/settings/administration"],
     ["security settings", "/settings/security", "/settings/security"],
     ["session settings", "/settings/sessions", "/settings/sessions"],
     ["token settings", "/settings/tokens", "/settings/tokens"],

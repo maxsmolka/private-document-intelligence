@@ -28,6 +28,7 @@ describe("Sidebar active navigation", () => {
     ["/timeline", "Timeline"],
     ["/upcoming", "Upcoming"],
     ["/settings/account", "Account"],
+    ["/settings/administration", "Administration"],
     ["/settings/security", "Security"],
     ["/settings/sessions", "Sessions"],
     ["/settings/tokens", "API Tokens"],
