@@ -5,9 +5,9 @@ from alembic import context
 from sqlalchemy import Connection, pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+from pdi.administration import models as administration_models  # noqa: F401
 from pdi.core.config import get_settings
 from pdi.core.models import Base
-from pdi.administration import models as administration_models  # noqa: F401
 from pdi.documents import models as document_models  # noqa: F401
 from pdi.ingestion import models as ingestion_models  # noqa: F401
 from pdi.knowledge import models as knowledge_models  # noqa: F401
