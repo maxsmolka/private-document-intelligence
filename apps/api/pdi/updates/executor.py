@@ -360,6 +360,20 @@ class ComposeDeploymentExecutor:
             )
             transition(session, run, UpdateState.VERIFYING, event_type="services_started")
             await session.commit()
+            if run.reindex_required:
+                await self.renew_executor_lease(session, run, lease_id)
+                await self.compose_stage(
+                    "SEARCH_FAILED",
+                    "Required search rebuild failed",
+                    "exec",
+                    "-T",
+                    "api",
+                    "pdi",
+                    "search",
+                    "rebuild",
+                    post_migration=migration_started,
+                    limit_seconds=900,
+                )
             await self.renew_executor_lease(session, run, lease_id)
             ready = await self.compose_stage(
                 "READINESS_FAILED",
@@ -377,20 +391,6 @@ class ComposeDeploymentExecutor:
                     "READINESS_FAILED",
                     "Application readiness did not pass",
                     post_migration=migration_started,
-                )
-            if run.reindex_required:
-                await self.renew_executor_lease(session, run, lease_id)
-                await self.compose_stage(
-                    "SEARCH_FAILED",
-                    "Required search rebuild failed",
-                    "exec",
-                    "-T",
-                    "api",
-                    "pdi",
-                    "search",
-                    "rebuild",
-                    post_migration=migration_started,
-                    limit_seconds=900,
                 )
             await self.renew_executor_lease(session, run, lease_id)
             search = await self.compose_stage(

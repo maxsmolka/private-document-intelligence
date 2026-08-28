@@ -10,9 +10,10 @@ The manager formalizes the existing sequence: readiness, search verification, st
 
 ## Operator workflow
 
-1. Set the installed exact digests and expected current schema in `.env.release`. Add `deploy/compose.update-managed.json` as the final Compose override and change its initial values to the installed exact digests.
+1. Replace the checked-in Compose definitions with those from the target release before planning. This is configuration staging only; do not recreate services yet. Set the installed exact digests and expected current schema in `.env.release`. Add `deploy/compose.update-managed.json` as the final Compose override and change every managed service's initial image to the installed exact backend/web digests. Newly defined target services remain stopped until execution.
 2. In **Settings → Updates**, check for releases, review the deterministic plan, and prepare it. Preparation runs preflight, creates and verifies a backup specifically linked to that run, enters durable maintenance mode, and waits for active jobs to drain. Queued jobs remain durable.
-3. On the NAS host, run the constrained executor. It requires all paths explicitly and supports only project `pdi`, services `api`, `worker`, and `web`, and the two official image repositories:
+3. Update the operator-controlled executor to the exact target backend digest from the validated manifest. This is required when a release adds a managed service or changes verification sequencing; never execute a new release with an older helper. The target helper still reads the prepared run from the installed database and validates the manifest-bound release identity.
+4. On the NAS host, run the constrained executor. It requires all paths explicitly and supports only project `pdi`, the known PDI application/scheduler services, and the two official image repositories:
 
 ```text
 pdi update execute --run-id RUN_UUID \
@@ -23,7 +24,7 @@ pdi update execute --run-id RUN_UUID \
   --dry-run
 ```
 
-Remove `--dry-run` only after reviewing the output. The executor validates the existing overlay against the recorded current digests, pulls and inspects target digests before downtime, validates image version/revision labels, rewrites only the three known image fields using structured JSON, validates Compose, stops only PDI application services, migrates with the target backend, verifies the exact schema, starts services, and runs blocking verification. The API has no Docker socket and cannot execute this command.
+Remove `--dry-run` only after reviewing the output. The executor validates the existing overlay against the recorded current digests, pulls and inspects target digests before downtime, validates image version/revision labels, rewrites only known image fields using structured JSON, validates Compose, stops only PDI application services, migrates with the target backend, verifies the exact schema, starts services, performs any manifest-required search rebuild, and then runs blocking readiness, search, storage, version, and execution-state verification. The API has no Docker socket and cannot execute this command.
 
 ## States, failure, and cancellation
 

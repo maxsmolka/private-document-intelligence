@@ -319,7 +319,7 @@ async def test_constrained_executor_dry_run_and_successful_update(
             target_backend_digest=DIGEST_C,
             target_web_digest=DIGEST_D,
             migration_required=True,
-            reindex_required=False,
+            reindex_required=True,
             backup_required=True,
             rollback_mode="restore_backup",
             expected_downtime="short",
@@ -333,6 +333,13 @@ async def test_constrained_executor_dry_run_and_successful_update(
         await session.commit()
         dry = await executor.dry_run(run)
         assert dry["mutated"] is False
+        assert dry["services"] == [
+            "api",
+            "worker",
+            "backup-scheduler",
+            "reminder-scheduler",
+            "web",
+        ]
         assert json.loads(overlay.read_text())["services"]["api"]["image"].endswith(DIGEST_A)
         completed = await executor.execute(session, Settings(env="test"), run)
         assert completed.state == UpdateState.COMPLETED, (
@@ -344,6 +351,17 @@ async def test_constrained_executor_dry_run_and_successful_update(
         assert completed.executor_lease_expires_at is None
         assert json.loads(overlay.read_text())["services"]["api"]["image"].endswith(DIGEST_C)
         assert not any("latest" in argument for call in calls for argument in call)
+        rendered_calls = [" ".join(call) for call in calls]
+        rebuild_index = next(
+            index for index, call in enumerate(rendered_calls) if "pdi search rebuild" in call
+        )
+        readiness_index = next(
+            index for index, call in enumerate(rendered_calls) if "pdi readiness" in call
+        )
+        verification_index = next(
+            index for index, call in enumerate(rendered_calls) if "pdi search verify" in call
+        )
+        assert rebuild_index < readiness_index < verification_index
         events = list(
             await session.scalars(select(UpdateEvent).where(UpdateEvent.update_run_id == run.id))
         )
