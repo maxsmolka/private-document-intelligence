@@ -3,6 +3,7 @@ export const navigationRouteOwners = [
   "/settings/sessions",
   "/settings/account",
   "/settings/tokens",
+  "/settings/ingestion",
   "/settings/updates",
   "/settings/about",
   "/admin/users",

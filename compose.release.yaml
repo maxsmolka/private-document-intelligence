@@ -23,7 +23,7 @@ x-backend-environment: &backend-environment
   PDI_UPDATE_CHANNEL: ${PDI_UPDATE_CHANNEL:-manual}
   PDI_UPDATE_BACKEND_DIGEST: ${PDI_UPDATE_BACKEND_DIGEST:?set the installed immutable backend digest in .env.release}
   PDI_UPDATE_WEB_DIGEST: ${PDI_UPDATE_WEB_DIGEST:?set the installed immutable web digest in .env.release}
-  PDI_UPDATE_EXPECTED_SCHEMA: ${PDI_UPDATE_EXPECTED_SCHEMA:-20260827_0014}
+  PDI_UPDATE_EXPECTED_SCHEMA: ${PDI_UPDATE_EXPECTED_SCHEMA:-20260828_0017}
 
 services:
   postgres:
@@ -82,6 +82,54 @@ services:
       retries: 5
       start_period: 20s
     stop_grace_period: 330s
+    restart: unless-stopped
+
+  consume:
+    profiles: ["consume"]
+    image: ghcr.io/maxsmolka/private-document-intelligence/backend:${PDI_VERSION:-1.2.0}
+    command: ["pdi-consume"]
+    environment:
+      <<: *backend-environment
+      PDI_CONSUME_ENABLED: "true"
+      PDI_CONSUME_PATH: /consume-root/inbox
+      PDI_CONSUME_PROCESSING_PATH: /consume-root/processing
+      PDI_CONSUME_PROCESSED_PATH: /consume-root/processed
+      PDI_CONSUME_FAILED_PATH: /consume-root/failed
+      PDI_CONSUME_STABILITY_SECONDS: ${PDI_CONSUME_STABILITY_SECONDS:-10}
+      PDI_CONSUME_POLL_INTERVAL: ${PDI_CONSUME_POLL_INTERVAL:-2}
+    volumes:
+      - document_storage:/data/documents
+      - ${PDI_CONSUME_HOST_PATH:-./consume}:/consume-root
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  mail:
+    profiles: ["mail"]
+    image: ghcr.io/maxsmolka/private-document-intelligence/backend:${PDI_VERSION:-1.2.0}
+    command: ["pdi-mail"]
+    environment:
+      <<: *backend-environment
+      PDI_MAIL_ENABLED: "true"
+      PDI_IMAP_HOST: ${PDI_IMAP_HOST:-}
+      PDI_IMAP_PORT: ${PDI_IMAP_PORT:-993}
+      PDI_IMAP_USER: ${PDI_IMAP_USER:-}
+      PDI_IMAP_PASSWORD_FILE: /run/secrets/imap_password
+      PDI_IMAP_MAILBOX: ${PDI_IMAP_MAILBOX:-INBOX}
+      PDI_MAIL_POLL_INTERVAL: ${PDI_MAIL_POLL_INTERVAL:-60}
+      PDI_IMAP_MAX_MESSAGES_PER_POLL: ${PDI_IMAP_MAX_MESSAGES_PER_POLL:-100}
+      PDI_IMAP_SOCKET_TIMEOUT_SECONDS: ${PDI_IMAP_SOCKET_TIMEOUT_SECONDS:-30}
+    volumes:
+      - document_storage:/data/documents
+      - ${PDI_IMAP_PASSWORD_FILE:-./secrets/imap_password}:/run/secrets/imap_password:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_healthy
     restart: unless-stopped
 
   web:
