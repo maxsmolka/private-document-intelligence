@@ -21,6 +21,8 @@ describe("activeNavigationRoute", () => {
     ["security settings", "/settings/security", "/settings/security"],
     ["session settings", "/settings/sessions", "/settings/sessions"],
     ["token settings", "/settings/tokens", "/settings/tokens"],
+    ["ingestion settings", "/settings/ingestion", "/settings/ingestion"],
+    ["ingestion source", "/settings/ingestion/source/123", "/settings/ingestion"],
     ["update settings", "/settings/updates", "/settings/updates"],
     ["update run", "/settings/updates/run/123", "/settings/updates"],
     ["about settings", "/settings/about", "/settings/about"],

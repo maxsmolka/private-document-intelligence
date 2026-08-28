@@ -237,6 +237,38 @@ async def test_consume_permission_error_is_visible_without_losing_source(
         assert await session.scalar(select(func.count()).select_from(Document)) == 0
 
 
+async def test_consume_accepts_large_pdf_within_configured_limit(
+    tmp_path: Path, postgres_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    settings = Settings(
+        env="test",
+        storage_path=tmp_path / "storage",
+        consume_path=tmp_path / "consume",
+        consume_processing_path=tmp_path / "processing",
+        consume_processed_path=tmp_path / "processed",
+        consume_failed_path=tmp_path / "failed",
+        consume_stability_seconds=1,
+        consume_enabled=True,
+        max_upload_size=3 * 1024 * 1024,
+    )
+    storage = LocalStorageBackend(settings.storage_path)
+    settings.consume_path.mkdir()
+    source_path = settings.consume_path / "large-scan.pdf"
+    source_path.write_bytes(PDF + b" " * (2 * 1024 * 1024))
+    async with postgres_factory() as session:
+        await process_consume_once(session, settings, storage)
+        record = await session.scalar(select(ExternalIngestion))
+        assert record is not None
+        record.stable_since = datetime.now(UTC) - timedelta(seconds=2)
+        await session.commit()
+        result = await process_consume_once(session, settings, storage)
+        assert result["ingested"] == 1
+        document = await session.scalar(select(Document))
+        assert document is not None
+        assert document.original_filename == "large-scan.pdf"
+        assert document.file_size > 2 * 1024 * 1024
+
+
 async def test_mail_ingests_supported_attachments_and_is_idempotent(
     tmp_path: Path, session_factory: async_sessionmaker[AsyncSession]
 ) -> None:

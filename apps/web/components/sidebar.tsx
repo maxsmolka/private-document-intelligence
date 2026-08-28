@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, CalendarClock, Clock3, FileCheck2, FileSearch, FileText, Info, KeyRound, LayoutDashboard, Lightbulb, MonitorSmartphone, RefreshCw, ScrollText, Settings, ShieldCheck, Users, X } from "lucide-react";
+import { Building2, CalendarClock, Clock3, FileCheck2, FileSearch, FileText, Inbox, Info, KeyRound, LayoutDashboard, Lightbulb, MonitorSmartphone, RefreshCw, ScrollText, Settings, ShieldCheck, Users, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { activeNavigationRoute } from "@/lib/navigation";
@@ -24,6 +24,7 @@ const groups = [
     { label: "Security", icon: ShieldCheck, href: "/settings/security" },
     { label: "Sessions", icon: MonitorSmartphone, href: "/settings/sessions" },
     { label: "API Tokens", icon: KeyRound, href: "/settings/tokens" },
+    { label: "Ingestion", icon: Inbox, href: "/settings/ingestion" },
     { label: "Updates", icon: RefreshCw, href: "/settings/updates" },
     { label: "About", icon: Info, href: "/settings/about" },
     { label: "Users", icon: Users, href: "/admin/users" },

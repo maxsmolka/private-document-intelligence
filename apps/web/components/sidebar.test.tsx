@@ -31,6 +31,8 @@ describe("Sidebar active navigation", () => {
     ["/settings/security", "Security"],
     ["/settings/sessions", "Sessions"],
     ["/settings/tokens", "API Tokens"],
+    ["/settings/ingestion", "Ingestion"],
+    ["/settings/ingestion/source/source-id", "Ingestion"],
     ["/settings/about", "About"],
     ["/admin/users", "Users"],
   ])("marks only the owner of %s active", (route, label) => {
