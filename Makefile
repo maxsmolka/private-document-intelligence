@@ -40,7 +40,7 @@ benchmark-intelligence:
 	cd apps/api && uv run pdi-benchmark-intelligence tests/fixtures/intelligence_corpus_v1.json --output intelligence-results.json --enforce-budgets
 
 benchmark-retrieval:
-	docker compose exec -T api pdi-benchmark-retrieval benchmark-corpus/retrieval.json
+	docker compose exec -T api pdi-benchmark-retrieval benchmark-corpus/retrieval.json --enforce-budgets
 
 benchmark-knowledge:
 	docker compose exec -T api pdi-benchmark-knowledge benchmark-corpus/knowledge.json

@@ -262,12 +262,30 @@ export interface SearchResult {
 }
 
 export interface SearchResponse {
-  schema_version: "1";
+  schema_version: "2";
   query: string;
   total: number;
   limit: number;
   offset: number;
   results: SearchResult[];
+  facets: SearchFacets;
+}
+
+export interface SearchFacet { value: string; label: string; count: number }
+export interface SearchFacets {
+  document_types: SearchFacet[];
+  organizations: SearchFacet[];
+  years: SearchFacet[];
+  review_states: SearchFacet[];
+  sources: SearchFacet[];
+}
+
+export interface SavedSearch {
+  id: string;
+  name: string;
+  filters: Record<string, string | boolean | number>;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ConfirmMetadata {
@@ -337,6 +355,14 @@ export function getSearch(filters: {
   documentType?: string;
   dateFrom?: string;
   dateTo?: string;
+  organizationId?: string;
+  contractId?: string;
+  hasEvent?: boolean;
+  hasDeadline?: boolean;
+  amountMin?: string;
+  amountMax?: string;
+  source?: string;
+  tag?: string;
 }) {
   const params = new URLSearchParams();
   if (filters.q) params.set("q", filters.q);
@@ -347,7 +373,23 @@ export function getSearch(filters: {
   if (filters.documentType) params.set("document_type", filters.documentType);
   if (filters.dateFrom) params.set("date_from", filters.dateFrom);
   if (filters.dateTo) params.set("date_to", filters.dateTo);
+  if (filters.organizationId) params.set("organization_id", filters.organizationId);
+  if (filters.contractId) params.set("contract_id", filters.contractId);
+  if (filters.hasEvent) params.set("has_event", "true");
+  if (filters.hasDeadline) params.set("has_deadline", "true");
+  if (filters.amountMin) params.set("amount_min", filters.amountMin);
+  if (filters.amountMax) params.set("amount_max", filters.amountMax);
+  if (filters.source) params.set("source", filters.source);
+  if (filters.tag) params.set("tag", filters.tag);
   return request<SearchResponse>(`/api/v1/search?${params}`);
+}
+
+export function saveSearch(name: string, filters: Record<string, string | boolean | number>) {
+  return mutate<SavedSearch>("/api/v1/search/saved", { name, filters });
+}
+
+export function deleteSavedSearch(id: string) {
+  return mutate<{ deleted: boolean }>(`/api/v1/search/saved/${encodeURIComponent(id)}/delete`);
 }
 
 export function getReviewQueue() {

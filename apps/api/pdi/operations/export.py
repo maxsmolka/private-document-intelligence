@@ -37,6 +37,7 @@ from pdi.knowledge.models import (
 )
 from pdi.operations.backup import write_checksums
 from pdi.operations.models import DocumentNote, DocumentTag, MigrationItem, MigrationRun, Tag
+from pdi.search.models import SavedSearch
 from pdi.storage.base import StorageBackend
 from pdi.version import PDI_VERSION
 
@@ -67,6 +68,7 @@ EXPORT_MODELS = (
     DocumentNote,
     MigrationRun,
     MigrationItem,
+    SavedSearch,
 )
 
 
