@@ -22,7 +22,7 @@ Current/future API concepts:
 | `GET /api/v1/documents/{id}` | Implemented canonical metadata |
 | `GET /api/v1/documents/{id}/content` | Implemented original content stream |
 | `GET /api/v1/documents/{id}/text` | Implemented extraction text plus provenance |
-| `GET /api/v1/search` | Implemented schema-v1 lexical retrieval, filters, matched fields, page snippets, and highlight ranges |
+| `GET /api/v1/search` | Implemented schema-v2 lexical retrieval, structured filters, facets, matched fields, page snippets, and highlight ranges |
 | `GET /api/v1/documents/{id}/metadata` | Reserved; future canonical/proposal provenance view |
 
 The M4 search contract is intentionally Atlas-ready. Atlas may submit a human query and filters, then use returned UUIDs, canonical metadata, match fields, and exact source snippets for higher-level reasoning. It should fetch `/documents/{id}/text` when it needs the full extraction and preserve PDI UUID/page provenance in its derived work. PDI does not generate an answer on Atlas's behalf.

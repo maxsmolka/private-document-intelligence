@@ -1,7 +1,7 @@
 {
   "documents": [
     {"id":"generali_notice","title":"Generali – Beitragsanpassung PKV 2026","document_type":"insurance_notice","life_area":"insurance","document_date":"2026-08-01","organization":"Generali Deutschland AG","identifier":"VS-12345678","amount":{"amount":"492.39","currency":"EUR","source":"492,39 EUR"},"pages":["Generali Deutschland AG informiert über Ihre private Krankenversicherung.","Der monatliche Beitrag beträgt ab 01.08.2026 492,39 EUR. Die Beitragsanpassung gilt für den Tarif Komfort."]},
-    {"id":"auto_invoice","title":"Werkstattrechnung Auto 2026","document_type":"invoice","life_area":"vehicle","document_date":"2026-05-14","organization":"Autohaus Beispiel GmbH","identifier":"RE-2026-1234","amount":{"amount":"840.20","currency":"EUR","source":"840,20 EUR"},"pages":["Rechnung für Reparatur und Inspektion des Fahrzeugs.","Rechnungsnummer RE-2026-1234. Gesamtbetrag 840,20 EUR."]},
+    {"id":"auto_invoice","title":"Werkstattrechnung Auto 2026","document_type":"invoice","life_area":"vehicle","document_date":"2026-05-14","organization":"Autohaus Beispiel GmbH","identifier":"RE-2026-1234","amount":{"amount":"840.20","currency":"EUR","source":"840,20 EUR"},"tags":["vehicle","important"],"source":"scanner","pages":["Rechnung für Reparatur und Inspektion des Fahrzeugs.","Rechnungsnummer RE-2026-1234. Gesamtbetrag 840,20 EUR."]},
     {"id":"tax_notice","title":"Einkommensteuerbescheid 2025","document_type":"tax_document","life_area":"tax","document_date":"2026-06-20","organization":"Finanzamt Berlin","identifier":"12/345/67890","pages":["Finanzamt Berlin – Steuerbescheid.","Der Einkommensteuerbescheid für 2025 setzt eine Nachzahlung fest."]},
     {"id":"mobile_contract","title":"Mobilfunkvertrag und Kündigung","document_type":"contract","life_area":"personal","document_date":"2025-11-03","organization":"Telekom Beispiel GmbH","identifier":"V-778899","pages":["Vertrag für den Mobilfunktarif Privat.","Die Kündigung des Vertrags ist mit einer Frist von drei Monaten möglich."]},
     {"id":"official_letter","title":"Schreiben der Zulassungsstelle","document_type":"official_letter","life_area":"vehicle","document_date":"2026-02-10","organization":"Landesamt für Bürgerdienste","identifier":"AZ-KFZ-2026-44","pages":["Amtliches Schreiben zur Fahrzeugzulassung.","Bitte reichen Sie den Versicherungsnachweis für das Fahrzeug ein."]},
@@ -21,6 +21,25 @@
     {"query":"Vertrag Kündigung","relevant":["mobile_contract"],"top":"mobile_contract"},
     {"query":"Fahrzeug Versicherungsnachweis","relevant":["official_letter"],"top":"official_letter"},
     {"query":"2026","relevant":["generali_notice"],"filters":{"life_area":"insurance","date_from":"2026-01-01","date_to":"2026-12-31"}},
-    {"query":"Rechnung","relevant":["auto_invoice"],"filters":{"document_type":"invoice","date_from":"2026-01-01","date_to":"2026-12-31"}}
+    {"query":"Rechnung","relevant":["auto_invoice"],"filters":{"document_type":"invoice","date_from":"2026-01-01","date_to":"2026-12-31"}},
+    {"query":"","relevant":["auto_invoice"],"filters":{"amount_min":"800","amount_max":"900","source":"scanner","tag":"important"}}
+  ],
+  "semantic_gate": [
+    {"query":"private Krankenversicherung Beitrag","relevant":["generali_notice"]},
+    {"query":"Einkommensteuer Nachzahlung","relevant":["tax_notice"]},
+    {"query":"Auto Reparatur","relevant":["auto_invoice"]},
+    {"query":"Fahrzeug Versicherung","relevant":["official_letter"]},
+    {"query":"Mobilfunk Kündigungsfrist","relevant":["mobile_contract"]},
+    {"query":"Lohnabrechnung","relevant":["employment_letter"]},
+    {"query":"Autowerkstatt Rechnung","relevant":["auto_invoice"]},
+    {"query":"Versicherungspolice","relevant":["insurance_policy"]},
+    {"query":"Handyvertrag","relevant":["mobile_contract"]},
+    {"query":"Kaufbeleg Kopfhörer","relevant":["purchase_receipt"]},
+    {"query":"Steuerforderung 2025","relevant":["tax_notice"]},
+    {"query":"Beitragserhöhung PKV","relevant":["generali_notice"]},
+    {"query":"Urlaubsfotos Strand","relevant":[]},
+    {"query":"Kochrezept Lasagne","relevant":[]},
+    {"query":"Tierarzt Impfung Hund","relevant":[]},
+    {"query":"Stromzähler Ablesung","relevant":[]}
   ]
 }

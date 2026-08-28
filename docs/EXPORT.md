@@ -1,6 +1,6 @@
 # Open export
 
-`pdi export TARGET` writes explicit JSON arrays for documents, assets, metadata history, intelligence, proposals, organizations, contracts, relations, events, deadlines, actions, knowledge, tags, notes, and migration provenance. Immutable originals are copied under `originals/`; a manifest and SHA-256 list cover the export.
+`pdi export TARGET` writes explicit JSON arrays for documents, assets, metadata history, intelligence, proposals, organizations, contracts, relations, events, deadlines, actions, knowledge, tags, notes, saved searches, and migration provenance. Immutable originals are copied under `originals/`; a manifest and SHA-256 list cover the export.
 
 ```bash
 docker compose exec -T api pdi export /backups/export-2026-08-20

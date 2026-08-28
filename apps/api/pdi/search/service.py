@@ -5,8 +5,10 @@ import re
 import time
 import unicodedata
 import uuid
+from collections import Counter
 from dataclasses import dataclass
 from datetime import date
+from decimal import Decimal, InvalidOperation
 from typing import Any, cast
 
 from sqlalchemy import func, literal_column, select, text
@@ -15,8 +17,21 @@ from sqlalchemy.orm import selectinload
 
 from pdi.documents.models import Document, DocumentStatus, LifeArea
 from pdi.ingestion.models import DocumentExtraction
+from pdi.knowledge.models import (
+    ContractDocument,
+    Deadline,
+    Organization,
+    OrganizationDocument,
+    TimelineEvent,
+)
 from pdi.search.models import SearchDocument
-from pdi.search.schemas import HighlightRange, SearchResult, SearchSnippet
+from pdi.search.schemas import (
+    HighlightRange,
+    SearchFacet,
+    SearchFacets,
+    SearchResult,
+    SearchSnippet,
+)
 
 logger = logging.getLogger("pdi.search")
 QUERY_TERM_PATTERN = re.compile(r"[\wÄÖÜäöüß]+(?:[-./][\wÄÖÜäöüß]+)*", re.UNICODE)
@@ -28,6 +43,21 @@ SEARCHABLE_CANONICAL_FIELDS = {
     "identifier",
     "contract",
     "amount",
+    "invoice_total",
+    "monthly_rent",
+    "service_charges",
+    "parking_fee",
+    "total_rent",
+    "deposit",
+    "contract_amount",
+    "account_balance",
+    "valuation",
+    "premium",
+    "refund",
+    "other_amount",
+    "monthly_contribution",
+    "retirement_assets",
+    "cancellation_value",
     "document_date",
     "due_date",
     "effective_date",
@@ -42,6 +72,8 @@ class SearchValues:
     organizations: str
     identifiers: str
     metadata: str
+    tags: str
+    amount: Decimal | None
     body: str
     pages: list[str]
     extraction_id: uuid.UUID | None
@@ -109,6 +141,38 @@ def canonical_field_values(document: Document, field_name: str) -> list[str]:
     return scalar_values(value)
 
 
+def canonical_amount(document: Document) -> Decimal | None:
+    for field_name in (
+        "invoice_total",
+        "total_rent",
+        "account_balance",
+        "contract_amount",
+        "valuation",
+        "premium",
+        "refund",
+        "monthly_rent",
+        "monthly_contribution",
+        "retirement_assets",
+        "cancellation_value",
+        "amount",
+        "other_amount",
+    ):
+        value = (document.canonical_metadata or {}).get(field_name)
+        candidates = (
+            scalar_values(value.get("amount")) if isinstance(value, dict) else scalar_values(value)
+        )
+        for candidate in candidates:
+            rendered = candidate.replace("EUR", "").replace("€", "").replace(" ", "")
+            rendered = rendered.replace(".", "").replace(",", ".") if "," in rendered else rendered
+            matched = re.search(r"-?\d+(?:[.]\d+)?", rendered)
+            if matched:
+                try:
+                    return Decimal(matched.group(0)).quantize(Decimal("0.01"))
+                except InvalidOperation:
+                    continue
+    return None
+
+
 def search_values(document: Document, extraction: DocumentExtraction | None = None) -> SearchValues:
     active_extraction = (
         extraction
@@ -119,6 +183,7 @@ def search_values(document: Document, extraction: DocumentExtraction | None = No
     )
     organizations = canonical_field_values(document, "organization")
     identifiers = canonical_field_values(document, "identifier")
+    tags = canonical_field_values(document, "tags")
     metadata = [
         document.document_type or "",
         document.life_area.value,
@@ -130,6 +195,8 @@ def search_values(document: Document, extraction: DocumentExtraction | None = No
     organization_text = "\n".join(dict.fromkeys(organizations))
     identifier_text = "\n".join(dict.fromkeys(identifiers))
     metadata_text = "\n".join(item for item in dict.fromkeys(metadata) if item)
+    tags_text = "\n".join(item for item in dict.fromkeys(tags) if item)
+    amount_value = canonical_amount(document)
     body = active_extraction.normalized_text or active_extraction.text if active_extraction else ""
     pages = active_extraction.pages if active_extraction else []
     extraction_content_hash = active_extraction.content_hash if active_extraction else None
@@ -138,6 +205,8 @@ def search_values(document: Document, extraction: DocumentExtraction | None = No
         "organizations": organization_text,
         "identifiers": identifier_text,
         "metadata": metadata_text,
+        "tags": tags_text,
+        "amount": str(amount_value) if amount_value is not None else None,
         "body": body,
         "pages": pages,
         "extraction_id": str(active_extraction.id) if active_extraction else None,
@@ -151,6 +220,8 @@ def search_values(document: Document, extraction: DocumentExtraction | None = No
         organizations=organization_text,
         identifiers=identifier_text,
         metadata=metadata_text,
+        tags=tags_text,
+        amount=amount_value,
         body=body,
         pages=pages,
         extraction_id=active_extraction.id if active_extraction else None,
@@ -197,6 +268,8 @@ async def refresh_search_index(
     indexed.organization_text = values.organizations
     indexed.identifier_text = values.identifiers
     indexed.metadata_text = values.metadata
+    indexed.tags_text = values.tags
+    indexed.amount_value = values.amount
     indexed.body_text = values.body
     indexed.pages = values.pages
     if session.bind and session.bind.dialect.name == "postgresql":
@@ -355,6 +428,131 @@ def exact_line_match(value: str, query: str) -> bool:
     return any(line.casefold() == folded for line in value.splitlines())
 
 
+async def search_facets(
+    session: AsyncSession,
+    *,
+    query: str,
+    document_status: DocumentStatus | None,
+    life_area: LifeArea | None,
+    document_type: str | None,
+    date_from: date | None,
+    date_to: date | None,
+    organization_id: uuid.UUID | None = None,
+    contract_id: uuid.UUID | None = None,
+    has_event: bool = False,
+    has_deadline: bool = False,
+    amount_min: Decimal | None = None,
+    amount_max: Decimal | None = None,
+    source: str | None = None,
+    tag: str | None = None,
+) -> SearchFacets:
+    if session.bind and session.bind.dialect.name == "postgresql":
+        filter_clause, parameters = filter_sql(
+            document_status=document_status,
+            life_area=life_area,
+            document_type=document_type,
+            date_from=date_from,
+            date_to=date_to,
+            organization_id=organization_id,
+            contract_id=contract_id,
+            has_event=has_event,
+            has_deadline=has_deadline,
+            amount_min=amount_min,
+            amount_max=amount_max,
+            source=source,
+            tag=tag,
+        )
+        parameters.update({"query": normalize_query(query), "has_query": bool(query)})
+        exact_identifier = "lower(s.identifier_text) = lower(:query)"
+        match_clause = f"(:has_query = false OR s.search_vector @@ q.value OR {exact_identifier})"
+        rows = (
+            await session.execute(
+                text(
+                    "SELECT d.id FROM search_documents s JOIN documents d ON d.id = s.document_id "
+                    "CROSS JOIN LATERAL "
+                    "(SELECT websearch_to_tsquery('german', :query) AS value) q "
+                    f"WHERE {match_clause}{filter_clause}"
+                ),
+                parameters,
+            )
+        ).all()
+        document_ids = [uuid.UUID(str(row.id)) for row in rows]
+    else:
+        results, _ = await fallback_search(
+            session,
+            query=normalize_query(query),
+            limit=1_000_000,
+            offset=0,
+            document_status=document_status,
+            life_area=life_area,
+            document_type=document_type,
+            date_from=date_from,
+            date_to=date_to,
+            organization_id=organization_id,
+            contract_id=contract_id,
+            has_event=has_event,
+            has_deadline=has_deadline,
+            amount_min=amount_min,
+            amount_max=amount_max,
+            source=source,
+            tag=tag,
+        )
+        document_ids = [item.document_id for item in results]
+    if not document_ids:
+        return SearchFacets()
+    documents = (
+        await session.execute(
+            select(
+                Document.id,
+                Document.document_type,
+                Document.document_date,
+                Document.status,
+                Document.source,
+            ).where(Document.id.in_(document_ids))
+        )
+    ).all()
+
+    def counted(values: list[str | None], *, limit: int = 20) -> list[SearchFacet]:
+        counts = Counter(item for item in values if item)
+        return [
+            SearchFacet(value=value, label=value.replace("_", " ").title(), count=count)
+            for value, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:limit]
+        ]
+
+    organization_rows = (
+        await session.execute(
+            select(
+                Organization.id,
+                Organization.canonical_name,
+                func.count(OrganizationDocument.document_id),
+            )
+            .join(OrganizationDocument, OrganizationDocument.organization_id == Organization.id)
+            .where(OrganizationDocument.document_id.in_(document_ids))
+            .group_by(Organization.id, Organization.canonical_name)
+            .order_by(
+                func.count(OrganizationDocument.document_id).desc(),
+                Organization.canonical_name,
+            )
+            .limit(50)
+        )
+    ).all()
+    return SearchFacets(
+        document_types=counted([row.document_type for row in documents]),
+        organizations=[
+            SearchFacet(value=str(row.id), label=row.canonical_name, count=int(row[2]))
+            for row in organization_rows
+        ],
+        years=counted(
+            [
+                str(row.document_date.year) if row.document_date is not None else None
+                for row in documents
+            ]
+        ),
+        review_states=counted([row.status.value for row in documents]),
+        sources=counted([row.source for row in documents]),
+    )
+
+
 async def search_documents(
     session: AsyncSession,
     *,
@@ -366,6 +564,14 @@ async def search_documents(
     document_type: str | None,
     date_from: date | None,
     date_to: date | None,
+    organization_id: uuid.UUID | None = None,
+    contract_id: uuid.UUID | None = None,
+    has_event: bool = False,
+    has_deadline: bool = False,
+    amount_min: Decimal | None = None,
+    amount_max: Decimal | None = None,
+    source: str | None = None,
+    tag: str | None = None,
 ) -> tuple[list[SearchResult], int]:
     normalized = normalize_query(query)
     started = time.perf_counter()
@@ -380,6 +586,14 @@ async def search_documents(
             document_type=document_type,
             date_from=date_from,
             date_to=date_to,
+            organization_id=organization_id,
+            contract_id=contract_id,
+            has_event=has_event,
+            has_deadline=has_deadline,
+            amount_min=amount_min,
+            amount_max=amount_max,
+            source=source,
+            tag=tag,
         )
     else:
         results, total = await fallback_search(
@@ -392,6 +606,14 @@ async def search_documents(
             document_type=document_type,
             date_from=date_from,
             date_to=date_to,
+            organization_id=organization_id,
+            contract_id=contract_id,
+            has_event=has_event,
+            has_deadline=has_deadline,
+            amount_min=amount_min,
+            amount_max=amount_max,
+            source=source,
+            tag=tag,
         )
     logger.info(
         "search_completed",
@@ -412,6 +634,14 @@ def filter_sql(
     document_type: str | None,
     date_from: date | None,
     date_to: date | None,
+    organization_id: uuid.UUID | None,
+    contract_id: uuid.UUID | None,
+    has_event: bool,
+    has_deadline: bool,
+    amount_min: Decimal | None,
+    amount_max: Decimal | None,
+    source: str | None,
+    tag: str | None,
 ) -> tuple[str, dict[str, object]]:
     clauses: list[str] = []
     parameters: dict[str, object] = {}
@@ -421,10 +651,35 @@ def filter_sql(
         ("document_type", document_type, "d.document_type = :document_type"),
         ("date_from", date_from, "d.document_date >= :date_from"),
         ("date_to", date_to, "d.document_date <= :date_to"),
+        ("source", source, "d.source = :source"),
+        ("amount_min", amount_min, "s.amount_value >= :amount_min"),
+        ("amount_max", amount_max, "s.amount_value <= :amount_max"),
+        (
+            "organization_id",
+            organization_id,
+            "EXISTS (SELECT 1 FROM organization_documents od "
+            "WHERE od.document_id = d.id AND od.organization_id = :organization_id)",
+        ),
+        (
+            "contract_id",
+            contract_id,
+            "EXISTS (SELECT 1 FROM contract_documents cd "
+            "WHERE cd.document_id = d.id AND cd.contract_id = :contract_id)",
+        ),
     ):
         if value is not None:
             clauses.append(clause)
             parameters[name] = value
+    if tag:
+        clauses.append(
+            "EXISTS (SELECT 1 FROM unnest(string_to_array(s.tags_text, E'\\n')) item "
+            "WHERE lower(item) = lower(:tag))"
+        )
+        parameters["tag"] = tag
+    if has_event:
+        clauses.append("EXISTS (SELECT 1 FROM timeline_events e WHERE e.source_document_id = d.id)")
+    if has_deadline:
+        clauses.append("EXISTS (SELECT 1 FROM deadlines dl WHERE dl.source_document_id = d.id)")
     return (" AND " + " AND ".join(clauses) if clauses else ""), parameters
 
 
@@ -439,6 +694,14 @@ async def postgres_search(
     document_type: str | None,
     date_from: date | None,
     date_to: date | None,
+    organization_id: uuid.UUID | None,
+    contract_id: uuid.UUID | None,
+    has_event: bool,
+    has_deadline: bool,
+    amount_min: Decimal | None,
+    amount_max: Decimal | None,
+    source: str | None,
+    tag: str | None,
 ) -> tuple[list[SearchResult], int]:
     filters, parameters = filter_sql(
         document_status=document_status,
@@ -446,6 +709,14 @@ async def postgres_search(
         document_type=document_type,
         date_from=date_from,
         date_to=date_to,
+        organization_id=organization_id,
+        contract_id=contract_id,
+        has_event=has_event,
+        has_deadline=has_deadline,
+        amount_min=amount_min,
+        amount_max=amount_max,
+        source=source,
+        tag=tag,
     )
     parameters.update({"query": query, "has_query": bool(query), "limit": limit, "offset": offset})
     exact_identifier = "lower(s.identifier_text) = lower(:query)"
@@ -487,6 +758,14 @@ async def fallback_search(
     document_type: str | None,
     date_from: date | None,
     date_to: date | None,
+    organization_id: uuid.UUID | None,
+    contract_id: uuid.UUID | None,
+    has_event: bool,
+    has_deadline: bool,
+    amount_min: Decimal | None,
+    amount_max: Decimal | None,
+    source: str | None,
+    tag: str | None,
 ) -> tuple[list[SearchResult], int]:
     rows = (
         await session.execute(
@@ -496,6 +775,34 @@ async def fallback_search(
         )
     ).all()
     terms = query_terms(query)
+    organization_documents = (
+        set(
+            await session.scalars(
+                select(OrganizationDocument.document_id).where(
+                    OrganizationDocument.organization_id == organization_id
+                )
+            )
+        )
+        if organization_id
+        else set()
+    )
+    contract_documents = (
+        set(
+            await session.scalars(
+                select(ContractDocument.document_id).where(
+                    ContractDocument.contract_id == contract_id
+                )
+            )
+        )
+        if contract_id
+        else set()
+    )
+    event_documents = (
+        set(await session.scalars(select(TimelineEvent.source_document_id))) if has_event else set()
+    )
+    deadline_documents = (
+        set(await session.scalars(select(Deadline.source_document_id))) if has_deadline else set()
+    )
     ranked: list[tuple[float, Any]] = []
     for indexed, document in rows:
         if document_status and document.status != document_status:
@@ -507,6 +814,26 @@ async def fallback_search(
         if date_from and (document.document_date is None or document.document_date < date_from):
             continue
         if date_to and (document.document_date is None or document.document_date > date_to):
+            continue
+        if source and document.source != source:
+            continue
+        if organization_id and document.id not in organization_documents:
+            continue
+        if contract_id and document.id not in contract_documents:
+            continue
+        if has_event and document.id not in event_documents:
+            continue
+        if has_deadline and document.id not in deadline_documents:
+            continue
+        if amount_min is not None and (
+            indexed.amount_value is None or indexed.amount_value < amount_min
+        ):
+            continue
+        if amount_max is not None and (
+            indexed.amount_value is None or indexed.amount_value > amount_max
+        ):
+            continue
+        if tag and not exact_line_match(indexed.tags_text, tag):
             continue
         combined = "\n".join(
             (

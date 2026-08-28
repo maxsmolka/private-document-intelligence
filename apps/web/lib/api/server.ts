@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import {
   ApiError,
   type DocumentListResponse, type DocumentRecord, type ExtractionHistory, type ReviewDetail,
-  type ReviewListResponse, type SearchResponse,
+  type ReviewListResponse, type SavedSearch, type SearchResponse,
 } from "./documents";
 import type {
   ActionItem, Contract, ContractDetail, Deadline, KnowledgeProposal, Organization,
@@ -35,10 +35,15 @@ export const getReviewQueue = () => serverRequest<ReviewListResponse>("/api/v1/r
 export const getReviewDetail = (id: string) => serverRequest<ReviewDetail>(`/api/v1/review/${encodeURIComponent(id)}`);
 export function getSearch(filters: Record<string, string | number | undefined>) {
   const params = new URLSearchParams();
-  const names: Record<string, string> = { lifeArea: "life_area", documentType: "document_type", dateFrom: "date_from", dateTo: "date_to" };
+  const names: Record<string, string> = {
+    lifeArea: "life_area", documentType: "document_type", dateFrom: "date_from", dateTo: "date_to",
+    organizationId: "organization_id", contractId: "contract_id", hasEvent: "has_event",
+    hasDeadline: "has_deadline", amountMin: "amount_min", amountMax: "amount_max",
+  };
   for (const [key, value] of Object.entries(filters)) if (value !== undefined && value !== "") params.set(names[key] ?? key, String(value));
   return serverRequest<SearchResponse>(`/api/v1/search?${params}`);
 }
+export const getSavedSearches = () => serverRequest<SavedSearch[]>("/api/v1/search/saved");
 export const getOrganizations = () => serverRequest<Page<Organization>>("/api/v1/organizations");
 export const getOrganization = (id: string) => serverRequest<OrganizationDetail>(`/api/v1/organizations/${encodeURIComponent(id)}`);
 export const getContracts = () => serverRequest<Page<Contract>>("/api/v1/contracts");
