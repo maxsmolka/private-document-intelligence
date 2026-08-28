@@ -4,6 +4,8 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from pdi.administration.router import router as settings_router
+from pdi.administration.service import effective_settings
 from pdi.api.health import router as health_router
 from pdi.api.system import router as system_router
 from pdi.auth.account import router as account_router
@@ -32,6 +34,8 @@ from pdi.version import PDI_VERSION
 async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     del application
     async with session_factory() as session:
+        settings = await effective_settings(session, get_settings())
+        configure_logging(settings.log_level)
         await recover_unfinished_updates(session)
     yield
 
@@ -62,6 +66,7 @@ def create_app() -> FastAPI:
     application.include_router(ingestion_sources_router, dependencies=protected)
     application.include_router(account_router, dependencies=protected)
     application.include_router(admin_router, dependencies=protected)
+    application.include_router(settings_router, dependencies=protected)
     application.include_router(system_router, dependencies=protected)
     application.include_router(updates_router, dependencies=protected)
     return application

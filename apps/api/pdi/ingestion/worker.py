@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from pdi.administration.service import effective_settings
 from pdi.core.config import Settings, get_settings
 from pdi.core.database import session_factory
 from pdi.core.logging import configure_logging
@@ -218,7 +219,9 @@ async def process_job(
     native_result = None
     ocr_required = document.mime_type.startswith("image/")
     if document.mime_type == "application/pdf":
-        native_result = await NativePdfProvider().extract(path, document.mime_type)
+        native_result = await NativePdfProvider(settings.ocr_minimum_characters_per_page).extract(
+            path, document.mime_type
+        )
         ocr_required = bool(native_result.metadata.get("requires_ocr"))
     if await observe_cancellation(session, job, worker_id=worker_id):
         return
@@ -243,6 +246,7 @@ async def process_job(
                 ocr_max_pages=settings.ocr_max_pages,
                 ocr_max_image_mpixels=settings.ocr_max_image_mpixels,
                 ocr_force_rotation=settings.ocr_force_rotation,
+                ocr_minimum_characters_per_page=settings.ocr_minimum_characters_per_page,
                 work_dir=Path(temporary),
                 native_result=native_result,
             )
@@ -411,11 +415,15 @@ async def process_job(
     )
 
 
-async def run_worker_slot(worker_id: str, settings: Settings, stop_event: asyncio.Event) -> None:
+async def run_worker_slot(
+    worker_id: str, deployment_settings: Settings, stop_event: asyncio.Event
+) -> None:
     while not stop_event.is_set():
+        settings = deployment_settings
         await asyncio.to_thread(LIVENESS_PATH.touch)
         try:
             async with session_factory() as session:
+                settings = await effective_settings(session, deployment_settings)
                 await recover_stale_jobs(
                     session, timeout_seconds=settings.worker_job_timeout, worker_id=worker_id
                 )
@@ -447,13 +455,14 @@ async def run_worker_slot(worker_id: str, settings: Settings, stop_event: asynci
                     async def maintain_claim(
                         claim_job_id: uuid.UUID = job.id,
                         claim_stop: asyncio.Event = heartbeat_stop,
+                        heartbeat_interval: int = settings.execution_heartbeat_seconds,
                     ) -> None:
                         while not claim_stop.is_set():
                             await heartbeat_job(claim_job_id, worker_id)
                             with contextlib.suppress(TimeoutError):
                                 await asyncio.wait_for(
                                     claim_stop.wait(),
-                                    timeout=settings.execution_heartbeat_seconds,
+                                    timeout=heartbeat_interval,
                                 )
 
                     heartbeat_task = asyncio.create_task(maintain_claim())
@@ -503,9 +512,11 @@ async def run_worker_slot(worker_id: str, settings: Settings, stop_event: asynci
 
 
 async def run_worker() -> None:
-    settings = get_settings()
-    configure_logging(settings.log_level)
-    identity = settings.worker_identity or f"{socket.gethostname()}-{os.getpid()}"
+    deployment_settings = get_settings()
+    async with session_factory() as session:
+        startup_settings = await effective_settings(session, deployment_settings)
+    configure_logging(startup_settings.log_level)
+    identity = startup_settings.worker_identity or f"{socket.gethostname()}-{os.getpid()}"
     stop_event = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
@@ -525,8 +536,8 @@ async def run_worker() -> None:
     await asyncio.gather(
         maintain_liveness(),
         *(
-            run_worker_slot(f"{identity}-{slot + 1}", settings, stop_event)
-            for slot in range(settings.worker_concurrency)
+            run_worker_slot(f"{identity}-{slot + 1}", deployment_settings, stop_event)
+            for slot in range(startup_settings.worker_concurrency)
         ),
     )
     logger.info("worker_stopped", extra={"operation": "shutdown", "worker_id": identity})

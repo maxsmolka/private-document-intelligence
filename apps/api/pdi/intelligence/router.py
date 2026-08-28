@@ -5,7 +5,8 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from pdi.core.config import Settings, get_settings
+from pdi.administration.dependencies import get_effective_settings
+from pdi.core.config import Settings
 from pdi.core.database import get_session
 from pdi.documents.service import get_document
 from pdi.ingestion.models import IntelligenceRun, MetadataProposal
@@ -19,7 +20,7 @@ from pdi.intelligence.schemas import IntelligenceRunRead
 
 router = APIRouter(prefix="/api/v1/documents", tags=["intelligence"])
 Session = Annotated[AsyncSession, Depends(get_session)]
-AppSettings = Annotated[Settings, Depends(get_settings)]
+AppSettings = Annotated[Settings, Depends(get_effective_settings)]
 
 
 @router.get("/{document_id}/intelligence", response_model=IntelligenceOverview)

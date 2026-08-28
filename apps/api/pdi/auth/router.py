@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from pdi.administration.dependencies import get_effective_settings
 from pdi.auth.service import (
     CSRF_COOKIE,
     SESSION_COOKIE,
@@ -16,14 +17,14 @@ from pdi.auth.service import (
     login,
     set_auth_cookies,
 )
-from pdi.core.config import Settings, get_settings
+from pdi.core.config import Settings
 from pdi.core.database import get_session
 from pdi.operations.models import LocalUser, UserSession
 from pdi.updates.service import maintenance_enabled
 
 router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
 Session = Annotated[AsyncSession, Depends(get_session)]
-AppSettings = Annotated[Settings, Depends(get_settings)]
+AppSettings = Annotated[Settings, Depends(get_effective_settings)]
 
 
 class LoginRequest(BaseModel):
