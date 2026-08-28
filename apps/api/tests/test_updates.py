@@ -1,5 +1,6 @@
 import json
 import uuid
+from argparse import Namespace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -9,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from pdi.auth.service import create_user
+from pdi.cli import run_update
 from pdi.core.config import Settings
 from pdi.documents.models import Document
 from pdi.ingestion.models import IngestionJob, IngestionJobState
@@ -223,6 +225,65 @@ def test_update_state_machine_rejects_invalid_transition() -> None:
     run = UpdateRun(state=UpdateState.PLANNED)
     with pytest.raises(ValueError, match="Invalid"):
         transition(Any, run, UpdateState.MIGRATING, event_type="unsafe")  # type: ignore[arg-type]
+
+
+async def test_update_cli_does_not_read_target_only_settings_before_migration(
+    tmp_path: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    run = UpdateRun(
+        state=UpdateState.AWAITING_EXECUTION,
+        active_guard=True,
+        from_version="1.3.0",
+        to_version="1.4.0-rc.3",
+        release_commit=COMMIT,
+        schema_before="20260828_0015",
+        schema_target="20260828_0020",
+        previous_backend_digest=DIGEST_A,
+        previous_web_digest=DIGEST_B,
+        target_backend_digest=DIGEST_C,
+        target_web_digest=DIGEST_D,
+        migration_required=True,
+        reindex_required=True,
+        backup_required=True,
+        rollback_mode="restore_backup",
+        expected_downtime="short",
+        architecture="linux/amd64",
+        compatibility="compatible",
+        warnings=[],
+        preflight={"result": "PASS"},
+    )
+    async with session_factory() as session:
+        session.add(run)
+        await session.commit()
+
+    async def target_only_settings_must_not_be_read(*args: object) -> Settings:
+        del args
+        raise AssertionError("target-only operational settings were read before migration")
+
+    class DryRunExecutor:
+        def __init__(self, deployment: ComposeDeployment) -> None:
+            self.deployment = deployment
+
+        async def dry_run(self, selected: UpdateRun) -> dict[str, object]:
+            assert selected.id == run.id
+            return {"result": "PASS", "mutated": False}
+
+    monkeypatch.setattr("pdi.cli.session_factory", session_factory)
+    monkeypatch.setattr("pdi.cli.get_settings", lambda: Settings(env="test"))
+    monkeypatch.setattr("pdi.cli.effective_settings", target_only_settings_must_not_be_read)
+    monkeypatch.setattr("pdi.cli.ComposeDeploymentExecutor", DryRunExecutor)
+
+    await run_update(
+        Namespace(
+            compose_file=[tmp_path / "compose.yaml"],
+            env_file=tmp_path / ".env.release",
+            managed_overlay=tmp_path / "compose.update-managed.json",
+            run_id=run.id,
+            dry_run=True,
+        )
+    )
 
 
 async def test_plan_is_deterministic_and_only_one_can_be_active(

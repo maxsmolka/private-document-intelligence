@@ -253,14 +253,16 @@ async def run_update(arguments: argparse.Namespace) -> None:
     )
     executor = ComposeDeploymentExecutor(deployment)
     async with session_factory() as session:
-        settings = await effective_settings(session, deployment_settings)
         run = await session.get(UpdateRun, arguments.run_id)
         if run is None:
             raise ValueError("Update run not found")
         if arguments.dry_run:
             output(await executor.dry_run(run))
         else:
-            output(serialize_run(await executor.execute(session, settings, run)))
+            # The target helper starts against the source-version schema. Runtime
+            # settings may live in a table introduced by the target migrations,
+            # so the executor must use deployment settings until migration ends.
+            output(serialize_run(await executor.execute(session, deployment_settings, run)))
 
 
 def add_source_options(command: argparse.ArgumentParser) -> None:
