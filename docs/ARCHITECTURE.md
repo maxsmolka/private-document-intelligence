@@ -8,7 +8,7 @@ PDI is the authoritative, local-first system of record for documents, originals,
 
 Atlas Personal Intelligence is a future API consumer. Atlas may reason over PDI data and retain derived reasoning, but it must never read PDI's PostgreSQL database or storage volume. PDI-derived facts remain authoritative in PDI.
 
-Semantic search, embeddings, Atlas implementation, notifications, and chat remain outside PDI. Milestone 6 adds authentication, read-only Paperless migration, external ingestion, coordinated recovery, open export, and operational readiness.
+Semantic search, embeddings, Atlas implementation, external notification delivery, and chat remain outside PDI. PDI does provide private, durable in-app deadline reminders. Milestone 6 adds authentication, read-only Paperless migration, external ingestion, coordinated recovery, open export, and operational readiness.
 
 ## System context
 
@@ -118,4 +118,4 @@ Completed intelligence runs feed a shared deterministic proposal stage. Canonica
 
 ## Future direction
 
-Chat, embeddings, notifications, richer entity types, and Atlas integration remain future work; Atlas continues to consume only stable HTTP APIs.
+Chat, embeddings, external notification channels, richer entity types, and Atlas integration remain future work; Atlas continues to consume only stable HTTP APIs.

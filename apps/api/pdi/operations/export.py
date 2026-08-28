@@ -33,6 +33,7 @@ from pdi.knowledge.models import (
     OrganizationAlias,
     OrganizationDocument,
     OrganizationMergeHistory,
+    ReminderNotification,
     TimelineEvent,
 )
 from pdi.operations.backup import write_checksums
@@ -69,6 +70,7 @@ EXPORT_MODELS = (
     MigrationRun,
     MigrationItem,
     SavedSearch,
+    ReminderNotification,
 )
 
 

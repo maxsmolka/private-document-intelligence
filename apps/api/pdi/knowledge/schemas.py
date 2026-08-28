@@ -2,7 +2,7 @@ from datetime import date, datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 from pdi.documents.models import LifeArea
 from pdi.knowledge.models import (
@@ -12,12 +12,14 @@ from pdi.knowledge.models import (
     ContractStatus,
     ContractType,
     DatePrecision,
+    DeadlineState,
     DeadlineStatus,
     DeadlineType,
     DocumentRelationshipType,
     EventType,
     KnowledgeProposalType,
     OrganizationStatus,
+    ReminderKind,
 )
 
 
@@ -138,6 +140,8 @@ class DeadlineRead(BaseModel):
     original_rule: str | None
     deadline_type: DeadlineType
     status: DeadlineStatus
+    snoozed_until: date | None
+    completed_at: datetime | None
     organization_id: UUID | None
     contract_id: UUID | None
     source_document_id: UUID
@@ -145,9 +149,40 @@ class DeadlineRead(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def state(self) -> DeadlineState:
+        current = date.today()
+        if self.status == DeadlineStatus.COMPLETED:
+            return DeadlineState.COMPLETED
+        if self.status == DeadlineStatus.DISMISSED:
+            return DeadlineState.DISMISSED
+        if self.status == DeadlineStatus.SNOOZED and (
+            self.snoozed_until is None or self.snoozed_until > current
+        ):
+            return DeadlineState.SNOOZED
+        if self.due_at is None or self.due_at > current:
+            return DeadlineState.UPCOMING
+        if self.due_at == current:
+            return DeadlineState.DUE
+        return DeadlineState.OVERDUE
+
 
 class DeadlineList(Page):
     items: list[DeadlineRead]
+
+
+class ReminderNotificationRead(BaseModel):
+    id: UUID
+    deadline_id: UUID
+    kind: ReminderKind
+    scheduled_for: date
+    due_at: date
+    channel: str
+    created_at: datetime
+    title: str
+    source_document_id: UUID
+    evidence: list[dict[str, Any]]
 
 
 class ActionItemRead(BaseModel):
@@ -172,6 +207,18 @@ class ActionItemRead(BaseModel):
 
 class ActionItemList(Page):
     items: list[ActionItemRead]
+
+
+class UpcomingRead(BaseModel):
+    generated_on: date
+    overdue: list[DeadlineRead]
+    today: list[DeadlineRead]
+    next_7_days: list[DeadlineRead]
+    next_30_days: list[DeadlineRead]
+    future: list[DeadlineRead]
+    snoozed: list[DeadlineRead]
+    actions: list[ActionItemRead]
+    notifications: list[ReminderNotificationRead]
 
 
 class KnowledgeProposalRead(BaseModel):
@@ -215,3 +262,17 @@ class OrganizationMergeRequest(BaseModel):
 
 class StateDecision(BaseModel):
     status: str
+
+
+class DeadlineStateDecision(BaseModel):
+    status: DeadlineStatus
+    snoozed_until: date | None = None
+
+    @model_validator(mode="after")
+    def validate_snooze(self) -> "DeadlineStateDecision":
+        if self.status == DeadlineStatus.SNOOZED:
+            if self.snoozed_until is None or self.snoozed_until <= date.today():
+                raise ValueError("snoozed_until must be a future date")
+        elif self.snoozed_until is not None:
+            raise ValueError("snoozed_until is valid only for snoozed deadlines")
+        return self

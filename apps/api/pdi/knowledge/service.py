@@ -742,7 +742,11 @@ async def update_action_status(
 
 
 async def update_deadline_status(
-    session: AsyncSession, deadline_id: uuid.UUID, new_status: DeadlineStatus
+    session: AsyncSession,
+    deadline_id: uuid.UUID,
+    new_status: DeadlineStatus,
+    *,
+    snoozed_until: date | None = None,
 ) -> Deadline:
     deadline = await session.scalar(
         select(Deadline).where(Deadline.id == deadline_id).with_for_update()
@@ -750,15 +754,26 @@ async def update_deadline_status(
     if deadline is None:
         raise HTTPException(status_code=404, detail="Deadline not found")
     previous = deadline.status
+    previous_snooze = deadline.snoozed_until
+    if previous == new_status and previous_snooze == snoozed_until:
+        return deadline
     deadline.status = new_status
+    deadline.snoozed_until = snoozed_until if new_status == DeadlineStatus.SNOOZED else None
+    deadline.completed_at = datetime.now(UTC) if new_status == DeadlineStatus.COMPLETED else None
     audit(
         session,
         resource_type="deadline",
         resource_id=deadline.id,
         action="status_changed",
         proposal=None,
-        previous_value={"status": previous.value},
-        new_value={"status": new_status.value},
+        previous_value={
+            "status": previous.value,
+            "snoozed_until": previous_snooze.isoformat() if previous_snooze else None,
+        },
+        new_value={
+            "status": new_status.value,
+            "snoozed_until": deadline.snoozed_until.isoformat() if deadline.snoozed_until else None,
+        },
     )
     await session.commit()
     await session.refresh(deadline)

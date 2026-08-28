@@ -22,7 +22,7 @@ Contracts have controlled types and lifecycle states, optional organization and 
 
 The deterministic German baseline extracts a small controlled set of explicit events and absolute deadlines. Dates carry precision. A relative phrase such as “within one month” is retained as `original_rule` with no invented due date. An action proposal is created only when the source text expresses an explicit obligation and supplies an exact due date. Timeline, upcoming deadlines, and actions are filterable, paginated API resources with source-document evidence.
 
-Deadline and action status changes are explicit API mutations and append history. No notification, calendar, or reminder side effect occurs in this milestone.
+Deadline and action status changes are explicit API mutations and append history. Deadline states are derived as upcoming, due, overdue, completed, dismissed, or snoozed. A separate restart-safe scheduler creates bounded, idempotent in-app reminders using configurable lead times; it never mutates an external calendar or sends email. See [Deadline reminders](REMINDERS.md).
 
 ## API surface
 

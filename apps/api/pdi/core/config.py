@@ -85,6 +85,15 @@ class Settings(BaseSettings):
     backup_interval_hours: int = Field(default=24, ge=1, le=168)
     backup_retention_count: int = Field(default=7, ge=1, le=365)
     backup_schedule_poll_seconds: int = Field(default=300, ge=30, le=3600)
+    reminders_enabled: bool = True
+    reminder_poll_seconds: int = Field(default=300, ge=30, le=3600)
+    deadline_lead_days_payment: int = Field(default=7, ge=0, le=365)
+    deadline_lead_days_cancellation: int = Field(default=30, ge=0, le=365)
+    deadline_lead_days_renewal: int = Field(default=30, ge=0, le=365)
+    deadline_lead_days_response: int = Field(default=7, ge=0, le=365)
+    deadline_lead_days_submission: int = Field(default=7, ge=0, le=365)
+    deadline_lead_days_appointment: int = Field(default=2, ge=0, le=365)
+    deadline_lead_days_other: int = Field(default=7, ge=0, le=365)
     update_channel: Literal["disabled", "manual", "weekly"] = "manual"
     update_allow_prerelease: bool = False
     update_github_api_url: str = (
@@ -97,7 +106,7 @@ class Settings(BaseSettings):
     update_drain_timeout_seconds: int = Field(default=300, ge=0, le=3600)
     update_backend_digest: str | None = None
     update_web_digest: str | None = None
-    update_expected_schema: str = "20260828_0018"
+    update_expected_schema: str = "20260828_0020"
     update_deployment_type: Literal["operator_cli"] = "operator_cli"
 
     @model_validator(mode="after")

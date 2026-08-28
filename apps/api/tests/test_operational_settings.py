@@ -73,6 +73,12 @@ async def test_settings_are_admin_only_safe_and_grouped(
         "ocr_language",
         "ocr_minimum_characters_per_page",
     }
+    notifications = next(item for item in payload["domains"] if item["key"] == "notifications")
+    assert {item["key"] for item in notifications["settings"]} >= {
+        "reminders_enabled",
+        "deadline_lead_days_payment",
+        "deadline_lead_days_cancellation",
+    }
 
 
 async def test_settings_validate_persist_audit_and_reset(
