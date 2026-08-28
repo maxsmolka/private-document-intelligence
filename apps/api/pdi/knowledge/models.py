@@ -114,6 +114,22 @@ class DeadlineStatus(StrEnum):
     OPEN = "open"
     COMPLETED = "completed"
     DISMISSED = "dismissed"
+    SNOOZED = "snoozed"
+
+
+class DeadlineState(StrEnum):
+    UPCOMING = "upcoming"
+    DUE = "due"
+    OVERDUE = "overdue"
+    COMPLETED = "completed"
+    DISMISSED = "dismissed"
+    SNOOZED = "snoozed"
+
+
+class ReminderKind(StrEnum):
+    UPCOMING = "upcoming"
+    DUE = "due"
+    OVERDUE = "overdue"
 
 
 class ActionStatus(StrEnum):
@@ -387,6 +403,8 @@ class Deadline(Base):
         ),
         default=DeadlineStatus.OPEN,
     )
+    snoozed_until: Mapped[date | None] = mapped_column(Date, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     organization_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True
     )
@@ -407,6 +425,31 @@ class Deadline(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class ReminderNotification(Base):
+    __tablename__ = "reminder_notifications"
+    __table_args__ = (
+        UniqueConstraint(
+            "deadline_id",
+            "kind",
+            "scheduled_for",
+            name="uq_reminder_deadline_kind_schedule",
+        ),
+        Index("ix_reminder_notifications_created", "created_at", "id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    deadline_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("deadlines.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[ReminderKind] = mapped_column(
+        Enum(ReminderKind, name="reminder_kind", values_callable=lambda e: [x.value for x in e])
+    )
+    scheduled_for: Mapped[date] = mapped_column(Date, nullable=False)
+    due_at: Mapped[date] = mapped_column(Date, nullable=False)
+    channel: Mapped[str] = mapped_column(String(20), default="in_app", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class ActionItem(Base):

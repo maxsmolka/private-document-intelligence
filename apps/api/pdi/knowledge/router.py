@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from typing import Annotated
 from uuid import UUID
 
@@ -17,6 +17,7 @@ from pdi.knowledge.models import (
     ContractStatus,
     ContractType,
     Deadline,
+    DeadlineState,
     DeadlineStatus,
     DocumentRelationship,
     EventType,
@@ -26,6 +27,7 @@ from pdi.knowledge.models import (
     OrganizationAlias,
     OrganizationDocument,
     OrganizationStatus,
+    ReminderNotification,
     TimelineEvent,
 )
 from pdi.knowledge.schemas import (
@@ -37,6 +39,7 @@ from pdi.knowledge.schemas import (
     ContractRead,
     DeadlineList,
     DeadlineRead,
+    DeadlineStateDecision,
     EventList,
     EventRead,
     KnowledgeDecision,
@@ -48,7 +51,9 @@ from pdi.knowledge.schemas import (
     OrganizationRead,
     RelationshipList,
     RelationshipRead,
+    ReminderNotificationRead,
     StateDecision,
+    UpcomingRead,
 )
 from pdi.knowledge.service import (
     accept_knowledge_proposal,
@@ -345,6 +350,84 @@ async def deadlines(
     )
 
 
+@router.get("/upcoming", response_model=UpcomingRead)
+async def upcoming(session: Session) -> UpcomingRead:
+    current = date.today()
+    deadlines = list(
+        await session.scalars(
+            select(Deadline)
+            .where(Deadline.status.in_((DeadlineStatus.OPEN, DeadlineStatus.SNOOZED)))
+            .order_by(Deadline.due_at.asc().nullslast(), Deadline.id)
+            .limit(500)
+        )
+    )
+    buckets: dict[str, list[DeadlineRead]] = {
+        "overdue": [],
+        "today": [],
+        "next_7_days": [],
+        "next_30_days": [],
+        "future": [],
+        "snoozed": [],
+    }
+    for deadline in deadlines:
+        item = DeadlineRead.model_validate(deadline)
+        if item.state == DeadlineState.SNOOZED:
+            buckets["snoozed"].append(item)
+        elif item.due_at is None or item.due_at > current + timedelta(days=30):
+            buckets["future"].append(item)
+        elif item.due_at < current:
+            buckets["overdue"].append(item)
+        elif item.due_at == current:
+            buckets["today"].append(item)
+        elif item.due_at <= current + timedelta(days=7):
+            buckets["next_7_days"].append(item)
+        else:
+            buckets["next_30_days"].append(item)
+    actions = list(
+        await session.scalars(
+            select(ActionItem)
+            .where(ActionItem.status == ActionStatus.OPEN)
+            .order_by(ActionItem.due_at.asc().nullslast(), ActionItem.id)
+            .limit(500)
+        )
+    )
+    notification_rows = (
+        await session.execute(
+            select(ReminderNotification, Deadline)
+            .join(Deadline, Deadline.id == ReminderNotification.deadline_id)
+            .where(Deadline.status == DeadlineStatus.OPEN)
+            .order_by(ReminderNotification.created_at.desc(), ReminderNotification.id.desc())
+            .limit(20)
+        )
+    ).all()
+    notifications = [
+        ReminderNotificationRead(
+            id=notification.id,
+            deadline_id=notification.deadline_id,
+            kind=notification.kind,
+            scheduled_for=notification.scheduled_for,
+            due_at=notification.due_at,
+            channel=notification.channel,
+            created_at=notification.created_at,
+            title=deadline.title,
+            source_document_id=deadline.source_document_id,
+            evidence=deadline.evidence,
+        )
+        for notification, deadline in notification_rows
+    ]
+    return UpcomingRead(
+        generated_on=current,
+        overdue=buckets["overdue"],
+        today=buckets["today"],
+        next_7_days=buckets["next_7_days"],
+        next_30_days=buckets["next_30_days"],
+        future=buckets["future"],
+        snoozed=buckets["snoozed"],
+        actions=[ActionItemRead.model_validate(item) for item in actions],
+        notifications=notifications,
+    )
+
+
 @router.get("/action-items", response_model=ActionItemList)
 async def action_items(
     session: Session,
@@ -376,13 +459,16 @@ async def action_items(
 
 @router.post("/deadlines/{deadline_id}/status", response_model=DeadlineRead)
 async def deadline_state(
-    deadline_id: UUID, values: StateDecision, session: Session
+    deadline_id: UUID, values: DeadlineStateDecision, session: Session
 ) -> DeadlineRead:
-    try:
-        state = DeadlineStatus(values.status)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail="Unknown deadline status") from exc
-    return DeadlineRead.model_validate(await update_deadline_status(session, deadline_id, state))
+    return DeadlineRead.model_validate(
+        await update_deadline_status(
+            session,
+            deadline_id,
+            values.status,
+            snoozed_until=values.snoozed_until,
+        )
+    )
 
 
 @router.post("/action-items/{item_id}/status", response_model=ActionItemRead)

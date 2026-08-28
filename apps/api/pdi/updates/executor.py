@@ -21,7 +21,7 @@ from pdi.updates.state import transition
 
 BACKEND_IMAGE = "ghcr.io/maxsmolka/private-document-intelligence/backend"
 WEB_IMAGE = "ghcr.io/maxsmolka/private-document-intelligence/web"
-ALLOWED_SERVICES = ("api", "worker", "web")
+ALLOWED_SERVICES = ("api", "worker", "backup-scheduler", "reminder-scheduler", "web")
 
 
 class DeploymentExecutionError(RuntimeError):
@@ -100,6 +100,8 @@ def overlay_payload(backend_digest: str, web_digest: str) -> dict[str, object]:
         "services": {
             "api": {"image": backend},
             "worker": {"image": backend},
+            "backup-scheduler": {"image": backend},
+            "reminder-scheduler": {"image": backend},
             "web": {"image": web},
         }
     }

@@ -7,7 +7,7 @@ import {
 } from "./documents";
 import type {
   ActionItem, Contract, ContractDetail, Deadline, KnowledgeProposal, Organization,
-  OrganizationDetail, TimelineEvent,
+  OrganizationDetail, TimelineEvent, UpcomingSnapshot,
 } from "./knowledge";
 
 interface Page<T> { items: T[]; total: number; limit: number; offset: number }
@@ -51,4 +51,5 @@ export const getContract = (id: string) => serverRequest<ContractDetail>(`/api/v
 export const getTimeline = (params?: URLSearchParams) => serverRequest<Page<TimelineEvent>>(`/api/v1/timeline${params?.size ? `?${params}` : ""}`);
 export const getDeadlines = () => serverRequest<Page<Deadline>>("/api/v1/deadlines?status=open");
 export const getActionItems = () => serverRequest<Page<ActionItem>>("/api/v1/action-items?status=open");
+export const getUpcoming = () => serverRequest<UpcomingSnapshot>("/api/v1/upcoming");
 export const getKnowledgeReview = (proposalType?: string) => serverRequest<Page<KnowledgeProposal>>(`/api/v1/knowledge/review${proposalType ? `?proposal_type=${encodeURIComponent(proposalType)}` : ""}`);

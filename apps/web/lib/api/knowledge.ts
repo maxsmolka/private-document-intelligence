@@ -27,7 +27,10 @@ export interface TimelineEvent {
 }
 export interface Deadline {
   id: string; title: string; due_at: string | null; original_rule: string | null; deadline_type: string;
-  status: string; organization_id: string | null; contract_id: string | null; source_document_id: string;
+  status: "open" | "completed" | "dismissed" | "snoozed";
+  state: "upcoming" | "due" | "overdue" | "completed" | "dismissed" | "snoozed";
+  snoozed_until: string | null; completed_at: string | null;
+  organization_id: string | null; contract_id: string | null; source_document_id: string;
   evidence: Evidence[]; created_at: string; updated_at: string;
 }
 export interface ActionItem {
@@ -40,6 +43,16 @@ export interface KnowledgeProposal {
   evidence: Evidence[]; evidence_verified: boolean; validation_notes: string[];
   possible_existing_organization_id: string | null; match_reason: string | null; status: string;
 }
+export interface ReminderNotification {
+  id: string; deadline_id: string; kind: "upcoming" | "due" | "overdue";
+  scheduled_for: string; due_at: string; channel: "in_app"; created_at: string;
+  title: string; source_document_id: string; evidence: Evidence[];
+}
+export interface UpcomingSnapshot {
+  generated_on: string; overdue: Deadline[]; today: Deadline[]; next_7_days: Deadline[];
+  next_30_days: Deadline[]; future: Deadline[]; snoozed: Deadline[];
+  actions: ActionItem[]; notifications: ReminderNotification[];
+}
 interface Page<T> { items: T[]; total: number; limit: number; offset: number }
 
 export const getOrganizations = () => request<Page<Organization>>("/api/v1/organizations");
@@ -49,6 +62,7 @@ export const getContract = (id: string) => request<ContractDetail>(`/api/v1/cont
 export const getTimeline = (params?: URLSearchParams) => request<Page<TimelineEvent>>(`/api/v1/timeline${params?.size ? `?${params}` : ""}`);
 export const getDeadlines = () => request<Page<Deadline>>("/api/v1/deadlines?status=open");
 export const getActionItems = () => request<Page<ActionItem>>("/api/v1/action-items?status=open");
+export const getUpcoming = () => request<UpcomingSnapshot>("/api/v1/upcoming");
 export const getKnowledgeReview = () => request<Page<KnowledgeProposal>>("/api/v1/knowledge/review");
 export const acceptKnowledge = (id: string, target?: string, values: Record<string, unknown> = {}) => mutate<KnowledgeProposal>(
   `/api/v1/knowledge/review/${encodeURIComponent(id)}/accept`,
@@ -56,4 +70,4 @@ export const acceptKnowledge = (id: string, target?: string, values: Record<stri
 );
 export const rejectKnowledge = (id: string) => mutate<KnowledgeProposal>(`/api/v1/knowledge/review/${encodeURIComponent(id)}/reject`);
 export const updateAction = (id: string, status: "completed" | "dismissed") => mutate<ActionItem>(`/api/v1/action-items/${encodeURIComponent(id)}/status`, { status });
-export const updateDeadline = (id: string, status: "completed" | "dismissed") => mutate<Deadline>(`/api/v1/deadlines/${encodeURIComponent(id)}/status`, { status });
+export const updateDeadline = (id: string, status: "open" | "completed" | "dismissed" | "snoozed", snoozedUntil?: string) => mutate<Deadline>(`/api/v1/deadlines/${encodeURIComponent(id)}/status`, { status, ...(snoozedUntil ? { snoozed_until: snoozedUntil } : {}) });

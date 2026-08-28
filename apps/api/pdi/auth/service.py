@@ -313,6 +313,7 @@ def required_scope(request: Request) -> str | None:
             "/api/v1/timeline",
             "/api/v1/deadlines",
             "/api/v1/action-items",
+            "/api/v1/upcoming",
             "/api/v1/relationships",
         )
     ):

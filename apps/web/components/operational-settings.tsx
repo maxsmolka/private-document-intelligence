@@ -42,7 +42,7 @@ const domainLabels: Record<string, string> = {
 const emptyDescriptions: Record<string, string> = {
   search: "PostgreSQL full-text search is authoritative and currently has no useful runtime controls.",
   backup: "Backup destinations remain deployment-owned. Coordinated backup actions are available to operators without exposing host paths.",
-  notifications: "Notification delivery is not configured in this milestone; secrets and destinations remain deployment-owned.",
+  notifications: "Private in-app reminder policy appears here. External delivery remains disabled.",
   system: "Database, storage, network, build, and secret settings remain deployment-owned and are intentionally read-only.",
 };
 

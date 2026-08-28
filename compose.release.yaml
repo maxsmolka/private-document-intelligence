@@ -23,7 +23,7 @@ x-backend-environment: &backend-environment
   PDI_UPDATE_CHANNEL: ${PDI_UPDATE_CHANNEL:-manual}
   PDI_UPDATE_BACKEND_DIGEST: ${PDI_UPDATE_BACKEND_DIGEST:?set the installed immutable backend digest in .env.release}
   PDI_UPDATE_WEB_DIGEST: ${PDI_UPDATE_WEB_DIGEST:?set the installed immutable web digest in .env.release}
-  PDI_UPDATE_EXPECTED_SCHEMA: ${PDI_UPDATE_EXPECTED_SCHEMA:-20260828_0018}
+  PDI_UPDATE_EXPECTED_SCHEMA: ${PDI_UPDATE_EXPECTED_SCHEMA:-20260828_0020}
 
 services:
   postgres:
@@ -93,6 +93,18 @@ services:
     volumes:
       - document_storage:/data/documents
       - backup_data:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  reminder-scheduler:
+    image: ghcr.io/maxsmolka/private-document-intelligence/backend:${PDI_VERSION:-1.2.0}
+    command: ["pdi-reminder-scheduler"]
+    environment:
+      <<: *backend-environment
     depends_on:
       postgres:
         condition: service_healthy
