@@ -17,7 +17,7 @@ A2 extends the existing PostgreSQL ingestion queue. It does not add a broker, di
 | OCR concurrency | Default worker count indirectly bounded OCR; no cross-process OCR limit | C | Durable OCR lease with a safe default of one added |
 | Intelligence concurrency | Provider timeout existed; local-AI work shared the document slot only | C | Durable local-AI lease added for Ollama |
 | Search maintenance | Canonical projection updates are short, synchronous domain transactions | A | Retained; no artificial task split |
-| Paperless migration | Import is resumable and content-idempotent; document processing is queued after preservation | B | Queued processing is explicitly `bulk` priority |
+| Paperless migration | Import is resumable and source/content-idempotent; document processing is queued after preservation | B | Important/urgent documents use `high`, documents from the last year use `background`, and older history uses `bulk` priority |
 | Consume/mail ingestion | Durable source claims converge on normal ingestion | A | Retained; job timeout persisted from policy |
 | Long synchronous operations | Backup/export/migration commands are operator workflows with their own bounds | B | Not moved into a speculative workflow engine |
 | Event history | Every state transition was durable, but provider timing/admission/cancellation were absent | B | Sanitized execution journal fields/events added |

@@ -31,6 +31,7 @@ pdi-benchmark-knowledge = "pdi.knowledge.benchmark:main"
 pdi-benchmark-operations = "pdi.operations.benchmark:main"
 pdi-benchmark-architecture = "pdi.architecture.benchmark:main"
 pdi-benchmark-execution = "pdi.execution.benchmark:main"
+pdi-benchmark-migration = "pdi.migration.benchmark:main"
 
 [dependency-groups]
 dev = [

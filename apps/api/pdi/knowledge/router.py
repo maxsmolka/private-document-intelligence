@@ -3,11 +3,11 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import Select, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pdi.core.database import get_session
-from pdi.documents.models import LifeArea
+from pdi.documents.models import Document, LifeArea
 from pdi.ingestion.models import ProposalStatus
 from pdi.knowledge.models import (
     ActionItem,
@@ -510,6 +510,13 @@ async def knowledge_review(
     session: Session,
     proposal_type: KnowledgeProposalType | None = None,
     document_id: UUID | None = None,
+    document_type: Annotated[str | None, Query(max_length=100)] = None,
+    confidence_min: Annotated[float | None, Query(ge=0, le=1)] = None,
+    confidence_max: Annotated[float | None, Query(ge=0, le=1)] = None,
+    sort: Annotated[
+        str,
+        Query(pattern="^(priority|confidence_desc|confidence_asc|oldest|newest)$"),
+    ] = "priority",
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> KnowledgeProposalList:
@@ -518,7 +525,37 @@ async def knowledge_review(
         statement = statement.where(KnowledgeProposal.proposal_type == proposal_type)
     if document_id:
         statement = statement.where(KnowledgeProposal.document_id == document_id)
-    statement = statement.order_by(KnowledgeProposal.created_at, KnowledgeProposal.id)
+    if document_type:
+        statement = statement.join(Document, Document.id == KnowledgeProposal.document_id).where(
+            func.lower(Document.document_type) == document_type.strip().casefold()
+        )
+    if confidence_min is not None:
+        statement = statement.where(KnowledgeProposal.confidence >= confidence_min)
+    if confidence_max is not None:
+        statement = statement.where(KnowledgeProposal.confidence <= confidence_max)
+    priority = case(
+        (
+            KnowledgeProposal.proposal_type.in_(
+                (KnowledgeProposalType.DEADLINE, KnowledgeProposalType.ACTION_ITEM)
+            ),
+            0,
+        ),
+        (
+            KnowledgeProposal.proposal_type.in_(
+                (KnowledgeProposalType.CONTRACT, KnowledgeProposalType.EVENT)
+            ),
+            1,
+        ),
+        else_=2,
+    )
+    ordering = {
+        "priority": (priority, KnowledgeProposal.confidence.desc(), KnowledgeProposal.created_at),
+        "confidence_desc": (KnowledgeProposal.confidence.desc(), KnowledgeProposal.created_at),
+        "confidence_asc": (KnowledgeProposal.confidence, KnowledgeProposal.created_at),
+        "oldest": (KnowledgeProposal.created_at, KnowledgeProposal.id),
+        "newest": (KnowledgeProposal.created_at.desc(), KnowledgeProposal.id.desc()),
+    }
+    statement = statement.order_by(*ordering[sort], KnowledgeProposal.id)
     items, total = await page(session, statement, limit, offset)
     organization_candidates = {
         item.id: (str(item.payload.get("canonical_name", "")).strip(), item.payload)

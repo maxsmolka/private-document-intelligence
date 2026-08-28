@@ -52,4 +52,24 @@ export const getTimeline = (params?: URLSearchParams) => serverRequest<Page<Time
 export const getDeadlines = () => serverRequest<Page<Deadline>>("/api/v1/deadlines?status=open");
 export const getActionItems = () => serverRequest<Page<ActionItem>>("/api/v1/action-items?status=open");
 export const getUpcoming = () => serverRequest<UpcomingSnapshot>("/api/v1/upcoming");
-export const getKnowledgeReview = (proposalType?: string) => serverRequest<Page<KnowledgeProposal>>(`/api/v1/knowledge/review${proposalType ? `?proposal_type=${encodeURIComponent(proposalType)}` : ""}`);
+interface KnowledgeReviewFilters {
+  proposalType?: string;
+  documentType?: string;
+  confidenceMin?: string;
+  confidenceMax?: string;
+  sort?: string;
+  offset?: number;
+}
+
+export const getKnowledgeReview = (filters?: string | KnowledgeReviewFilters) => {
+  const values = typeof filters === "string" ? { proposalType: filters } : filters ?? {};
+  const params = new URLSearchParams();
+  if (values.proposalType) params.set("proposal_type", values.proposalType);
+  if (values.documentType) params.set("document_type", values.documentType);
+  if (values.confidenceMin) params.set("confidence_min", values.confidenceMin);
+  if (values.confidenceMax) params.set("confidence_max", values.confidenceMax);
+  if (values.sort) params.set("sort", values.sort);
+  if (values.offset) params.set("offset", String(values.offset));
+  params.set("limit", "100");
+  return serverRequest<Page<KnowledgeProposal>>(`/api/v1/knowledge/review?${params}`);
+};
