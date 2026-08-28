@@ -424,9 +424,21 @@ async def test_constrained_executor_dry_run_and_successful_update(
         )
         assert rebuild_index < readiness_index < verification_index
         events = list(
-            await session.scalars(select(UpdateEvent).where(UpdateEvent.update_run_id == run.id))
+            await session.scalars(
+                select(UpdateEvent)
+                .where(UpdateEvent.update_run_id == run.id)
+                .order_by(UpdateEvent.created_at)
+            )
         )
-        assert any(event.event_type == "update_completed" for event in events)
+        assert [event.event_type for event in events] == [
+            "images_pull_started",
+            "images_verified",
+            "deployment_pinned",
+            "services_stopped",
+            "migration_completed",
+            "services_started",
+            "update_completed",
+        ]
         assert not any(event.event_type == "crash_recovered" for event in events)
 
 
