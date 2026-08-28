@@ -217,8 +217,7 @@ def main() -> None:
     report = asyncio.run(run(arguments.sizes, execute=arguments.execute))
     print(json.dumps(report, indent=2))
     if arguments.enforce_budgets and not all(
-        all(bool(passed) for passed in result["budgets"].values())
-        for result in report["sizes"]
+        all(bool(passed) for passed in result["budgets"].values()) for result in report["sizes"]
     ):
         raise SystemExit("Paperless migration benchmark budget failed")
 
