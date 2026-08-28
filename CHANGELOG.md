@@ -2,6 +2,29 @@
 
 All notable changes are documented here. PDI follows Semantic Versioning.
 
+## [1.4.0] - 2026-08-28
+
+### Added
+
+- Add durable, observable consume-folder and read-only IMAP ingestion sources with stable-file detection, restart-safe identities, safe retries, health reporting, and an administration view.
+- Add validated, audited runtime administration for OCR, intelligence, execution, backup, update, reminder, and ingestion policy while keeping deployment settings and secrets operator-owned.
+- Expand the deterministic German document intelligence corpus and semantics for invoices, contracts, insurance, pensions, rental documents, dates, amounts, identifiers, and evidence-prioritized review.
+- Add structured PostgreSQL retrieval, facets, user-owned saved searches, knowledge-aware filters, measured ranking budgets, and an explicit decision to defer semantic/vector infrastructure.
+- Add durable in-app deadline reminders, bounded restart-safe evaluation, configurable lead times, evidence navigation, and completed/snoozed/dismissed lifecycle actions.
+- Add resumable full-library Paperless preservation, immutable legacy OCR, exact asset/metadata/search verification, categorized discrepancies, review-backlog controls, and 100/1,000/10,000-document migration benchmarks.
+
+### Reliability and security
+
+- Preserve source files before acknowledging consume or migration success; reject changed immutable source assets and explicitly block unpreserved Paperless workflows.
+- Keep IMAP read-only, credentials file-backed, runtime settings allow-listed, review decisions proposal-scoped, and the main API isolated from Docker and host mutation.
+- Retain PostgreSQL as the authority for ingestion, execution, search, knowledge, reminders, settings, and update state; no broker, vector database, workflow engine, Atlas, or Compute Core dependency is added.
+
+### Upgrade
+
+- The final schema is `20260828_0020`. A direct v1.2.0 schema `20260826_0013` upgrade executes migrations 0014 through 0020 in order.
+- PDI v1.2.0 does not include the Controlled Update Manager. Adopt v1.3.0 first through the documented backup-first, digest-pinned manual bootstrap; subsequent installation of v1.4.0 is manager-controlled.
+- Rollback after migration requires restoring the coordinated pre-upgrade database and storage backup; image-only downgrade is not supported.
+
 ## [1.3.0] - 2026-08-28
 
 ### Added
@@ -121,6 +144,7 @@ All notable changes are documented here. PDI follows Semantic Versioning.
 
 [1.2.0]: https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.2.0
 [1.3.0]: https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.3.0
+[1.4.0]: https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.4.0
 [1.1.2]: https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.1.2
 [1.1.0]: https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.1.0
 [1.0.2]: https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.0.2

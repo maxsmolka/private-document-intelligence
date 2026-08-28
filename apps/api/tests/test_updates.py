@@ -31,8 +31,9 @@ from pdi.updates.service import (
     set_maintenance,
 )
 from pdi.updates.state import transition
+from pdi.version import PDI_VERSION
 
-VERSION = "1.3.1"
+VERSION = "1.4.1"
 DIGEST_A = "sha256:" + "a" * 64
 DIGEST_B = "sha256:" + "b" * 64
 DIGEST_C = "sha256:" + "c" * 64
@@ -54,7 +55,7 @@ def manifest(**overrides: object) -> dict[str, object]:
         "backup_required": True,
         "rollback_mode": "restore_backup",
         "release_notes_url": (
-            "https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.3.1"
+            "https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.4.1"
         ),
         "architectures": ["linux/amd64", "linux/arm64"],
     }
@@ -135,16 +136,16 @@ async def test_discovery_selects_newest_stable_official_release_and_fetches_mani
                     "html_url": "https://github.com/maxsmolka/private-document-intelligence/releases/tag/v2.0.0",
                 },
                 {
-                    "tag_name": "v1.3.1",
+                    "tag_name": "v1.4.1",
                     "draft": False,
                     "prerelease": False,
                     "published_at": "2026-08-27T10:00:00Z",
                     "body": "Safe patch",
-                    "html_url": "https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.3.1",
+                    "html_url": "https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.4.1",
                     "assets": [
                         {
                             "name": "pdi-release-manifest.json",
-                            "browser_download_url": "https://github.com/maxsmolka/private-document-intelligence/releases/download/v1.3.1/pdi-release-manifest.json",
+                            "browser_download_url": "https://github.com/maxsmolka/private-document-intelligence/releases/download/v1.4.1/pdi-release-manifest.json",
                         }
                     ],
                 },
@@ -179,21 +180,21 @@ async def test_discovery_handles_no_update_malformed_manifest_and_timeout() -> N
         if url.endswith("/releases"):
             return [
                 {
-                    "tag_name": "v1.3.1",
+                    "tag_name": "v1.4.1",
                     "draft": False,
                     "prerelease": False,
                     "published_at": "2026-08-27T10:00:00Z",
                     "body": "",
-                    "html_url": "https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.3.1",
+                    "html_url": "https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.4.1",
                     "assets": [
                         {
                             "name": "pdi-release-manifest.json",
-                            "browser_download_url": "https://github.com/maxsmolka/private-document-intelligence/releases/download/v1.3.1/pdi-release-manifest.json",
+                            "browser_download_url": "https://github.com/maxsmolka/private-document-intelligence/releases/download/v1.4.1/pdi-release-manifest.json",
                         }
                     ],
                 }
             ]
-        return {"version": "1.3.1"}
+        return {"version": "1.4.1"}
 
     with pytest.raises(ReleaseDiscoveryError, match="fields"):
         await discover_release(Settings(env="test"), current_version="1.3.0", fetcher=broken)
@@ -296,7 +297,7 @@ async def test_constrained_executor_dry_run_and_successful_update(
         run = UpdateRun(
             state=UpdateState.AWAITING_EXECUTION,
             active_guard=True,
-            from_version="1.3.0",
+            from_version=PDI_VERSION,
             to_version=VERSION,
             release_commit=COMMIT,
             schema_before="20260826_0013",
@@ -428,7 +429,7 @@ async def test_prepare_requires_and_links_a_fresh_verified_backup(
         run = UpdateRun(
             state=UpdateState.PLANNED,
             active_guard=True,
-            from_version="1.3.0",
+            from_version=PDI_VERSION,
             to_version=VERSION,
             release_commit=COMMIT,
             schema_before="20260826_0013",
@@ -539,7 +540,7 @@ async def test_prepare_blocks_before_installation_on_backup_or_drain_failure(
         run = UpdateRun(
             state=UpdateState.PLANNED,
             active_guard=True,
-            from_version="1.3.0",
+            from_version=PDI_VERSION,
             to_version=VERSION,
             release_commit=COMMIT,
             schema_before="20260826_0013",
@@ -662,7 +663,7 @@ async def test_executor_failure_semantics_are_stage_aware(
         run = UpdateRun(
             state=UpdateState.AWAITING_EXECUTION,
             active_guard=True,
-            from_version="1.3.0",
+            from_version=PDI_VERSION,
             to_version=VERSION,
             release_commit=COMMIT,
             schema_before="20260826_0013",
@@ -710,7 +711,7 @@ async def test_crash_recovery_does_not_replay_destructive_steps_and_redacts_secr
         run = UpdateRun(
             state=UpdateState.MIGRATING,
             active_guard=True,
-            from_version="1.3.0",
+            from_version=PDI_VERSION,
             to_version=VERSION,
             release_commit=COMMIT,
             schema_before="20260826_0013",
@@ -743,7 +744,7 @@ async def test_startup_recovery_preserves_live_executor_and_recovers_expired_lea
         run = UpdateRun(
             state=UpdateState.STARTING,
             active_guard=True,
-            from_version="1.3.0",
+            from_version=PDI_VERSION,
             to_version=VERSION,
             release_commit=COMMIT,
             schema_before="20260826_0013",
