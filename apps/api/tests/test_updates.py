@@ -41,6 +41,18 @@ DIGEST_D = "sha256:" + "d" * 64
 COMMIT = "1" * 40
 
 
+def test_final_release_policy_matches_managed_upgrade_boundary() -> None:
+    policy_path = Path(__file__).resolve().parents[3] / "release-manifest-policy.json"
+    policy = json.loads(policy_path.read_text(encoding="utf-8"))
+
+    assert policy["minimum_supported_version"] == "1.3.0"
+    assert policy["minimum_schema"] == "20260828_0015"
+    assert policy["target_schema"] == "20260828_0020"
+    assert policy["migration_required"] is True
+    assert policy["reindex_required"] is True
+    assert policy["backup_required"] is True
+
+
 def manifest(**overrides: object) -> dict[str, object]:
     values: dict[str, object] = {
         "version": VERSION,
