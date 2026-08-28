@@ -281,6 +281,10 @@ class ComposeDeploymentExecutor:
                     duration_ms=(time.perf_counter() - pull_started) * 1000,
                 )
             )
+            # Persist the verification boundary independently. PostgreSQL uses a
+            # transaction timestamp for server defaults, so batching this event
+            # with deployment_pinned makes their audit order ambiguous.
+            await session.commit()
             atomic_write_overlay(
                 self.deployment.managed_overlay,
                 overlay_payload(run.target_backend_digest, run.target_web_digest),
