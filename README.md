@@ -86,7 +86,7 @@ Quality commands and contribution rules are in [CONTRIBUTING.md](CONTRIBUTING.md
 - [Account security and key management](docs/ACCOUNT_SECURITY.md)
 - [Repository and release security](docs/REPOSITORY_SECURITY.md)
 - [Operations](docs/OPERATIONS.md), [controlled updates](docs/UPDATES.md), [backup/restore](docs/BACKUP_RESTORE.md), and [cutover](docs/CUTOVER.md)
-- [Paperless migration](docs/PAPERLESS_MIGRATION.md) and [open export](docs/EXPORT.md)
+- [Paperless migration](docs/PAPERLESS_MIGRATION.md), [full-cutover readiness](docs/PAPERLESS_CUTOVER_READINESS.md), and [open export](docs/EXPORT.md)
 - [Architecture](docs/ARCHITECTURE.md) and [future Atlas boundary](docs/ATLAS_INTEGRATION.md)
 - [First-run setup](docs/FIRST_RUN_SETUP.md), [release process](docs/RELEASES.md), and [v1.2.0 notes](docs/releases/v1.2.0.md)
 

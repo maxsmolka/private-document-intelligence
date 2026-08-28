@@ -442,6 +442,89 @@ async def test_knowledge_review_batches_organization_resolution_queries(
     assert len(statements) <= 4
 
 
+async def test_knowledge_review_filters_and_prioritizes_large_backlog_controls(
+    client: AsyncClient, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    async with session_factory() as session:
+        insurance, insurance_extraction, insurance_run = await seed_run(
+            session, "review-filter-insurance"
+        )
+        invoice, invoice_extraction, invoice_run = await seed_run(session, "review-filter-invoice")
+        invoice.document_type = "invoice"
+        proposals = [
+            KnowledgeProposal(
+                identity_key="review-filter-deadline".ljust(64, "0"),
+                proposal_type=KnowledgeProposalType.DEADLINE,
+                document_id=invoice.id,
+                extraction_id=invoice_extraction.id,
+                intelligence_run_id=invoice_run.id,
+                knowledge_schema_version="1",
+                provider="deterministic",
+                provider_version="1",
+                payload={"title": "Payment due"},
+                confidence=0.81,
+                evidence=[],
+                evidence_verified=True,
+                status=ProposalStatus.PENDING,
+            ),
+            KnowledgeProposal(
+                identity_key="review-filter-contract".ljust(64, "0"),
+                proposal_type=KnowledgeProposalType.CONTRACT,
+                document_id=insurance.id,
+                extraction_id=insurance_extraction.id,
+                intelligence_run_id=insurance_run.id,
+                knowledge_schema_version="1",
+                provider="deterministic",
+                provider_version="1",
+                payload={"title": "Insurance contract"},
+                confidence=0.98,
+                evidence=[],
+                evidence_verified=True,
+                status=ProposalStatus.PENDING,
+            ),
+            KnowledgeProposal(
+                identity_key="review-filter-organization".ljust(64, "0"),
+                proposal_type=KnowledgeProposalType.ORGANIZATION,
+                document_id=invoice.id,
+                extraction_id=invoice_extraction.id,
+                intelligence_run_id=invoice_run.id,
+                knowledge_schema_version="1",
+                provider="deterministic",
+                provider_version="1",
+                payload={"canonical_name": "Invoice organization"},
+                confidence=0.55,
+                evidence=[],
+                evidence_verified=True,
+                status=ProposalStatus.PENDING,
+            ),
+        ]
+        session.add_all(proposals)
+        await session.commit()
+
+    priority = await client.get("/api/v1/knowledge/review", params={"sort": "priority"})
+    assert priority.status_code == 200
+    assert priority.json()["items"][0]["proposal_type"] == "deadline"
+
+    filtered = await client.get(
+        "/api/v1/knowledge/review",
+        params={
+            "document_type": "invoice",
+            "confidence_min": "0.75",
+            "sort": "confidence_desc",
+        },
+    )
+    assert filtered.status_code == 200
+    assert filtered.json()["total"] == 1
+    assert filtered.json()["items"][0]["proposal_type"] == "deadline"
+
+    low_confidence = await client.get(
+        "/api/v1/knowledge/review",
+        params={"confidence_max": "0.6", "sort": "confidence_asc"},
+    )
+    assert low_confidence.status_code == 200
+    assert [item["proposal_type"] for item in low_confidence.json()["items"]] == ["organization"]
+
+
 async def test_rejected_knowledge_proposal_is_audited(
     client: AsyncClient, session_factory: async_sessionmaker[AsyncSession]
 ) -> None:

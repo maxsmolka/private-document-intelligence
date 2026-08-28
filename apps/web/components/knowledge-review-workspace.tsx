@@ -27,7 +27,6 @@ export function KnowledgeReviewWorkspace({ proposals }: { proposals: KnowledgePr
   const [editing, setEditing] = useState<string | null>(null);
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
-  const [type, setType] = useState("all");
 
   async function decide(item: KnowledgeProposal, action: "create" | "link" | "reject") {
     setBusy(item.id);
@@ -57,15 +56,13 @@ export function KnowledgeReviewWorkspace({ proposals }: { proposals: KnowledgePr
   if (!pending.length) {
     return <div className="empty-state"><p className="text-sm text-stone-500">No knowledge proposals await review.</p></div>;
   }
-  const types = [...new Set(pending.map((item) => item.proposal_type))].sort();
-  const visible = type === "all" ? pending : pending.filter((item) => item.proposal_type === type);
-  const grouped = visible.reduce<Record<string, KnowledgeProposal[]>>((current, item) => {
+  const grouped = pending.reduce<Record<string, KnowledgeProposal[]>>((current, item) => {
     (current[item.proposal_type] ??= []).push(item);
     return current;
   }, {});
   return <div>
     {error ? <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
-    <div className="mb-5 flex flex-col justify-between gap-3 rounded-xl border border-stone-200 bg-white p-4 sm:flex-row sm:items-center"><p className="text-xs leading-5 text-stone-500">{pending.length} {pending.length === 1 ? "knowledge proposal" : "knowledge proposals"} pending. Each decision is proposal-scoped.</p><select value={type} onChange={(event) => setType(event.target.value)} className="field sm:w-52" aria-label="Filter by proposal type"><option value="all">All proposal types</option>{types.map((value) => <option key={value} value={value}>{label(value)}</option>)}</select></div>
+    <div className="mb-5 rounded-xl border border-stone-200 bg-white p-4"><p className="text-xs leading-5 text-stone-500">{pending.length} {pending.length === 1 ? "knowledge proposal" : "knowledge proposals"} loaded. Each decision is proposal-scoped.</p></div>
     <div className="space-y-7">
       {Object.entries(grouped).map(([group, items]) => <section key={group}><div className="mb-2 flex items-center justify-between"><h2 className="eyebrow text-stone-600">{label(group)}</h2><span className="text-xs text-stone-400">{items?.length ?? 0}</span></div><div className="panel divide-y divide-stone-100 overflow-hidden">{items?.map((item) => <article key={item.id} className="min-w-0 p-5">
         <div className="flex items-start justify-between gap-4">
