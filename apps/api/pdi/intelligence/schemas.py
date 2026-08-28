@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-SCHEMA_VERSION = "2"
+SCHEMA_VERSION = "3"
 DOCUMENT_TYPES = {
     "invoice",
     "receipt",
@@ -14,12 +14,19 @@ DOCUMENT_TYPES = {
     "tax_document",
     "contract",
     "official_letter",
+    "official_notice",
     "medical_document",
     "vehicle_document",
     "employment_document",
     "travel_document",
     "generic_letter",
     "pension_statement",
+    "insurance_statement",
+    "rental_contract",
+    "correspondence",
+    "certificate",
+    "warranty",
+    "other",
 }
 LIFE_AREAS = {
     "finance",
@@ -60,18 +67,42 @@ class IntelligenceCandidate(BaseModel):
         "title",
         "organization",
         "document_date",
+        "invoice_date",
         "due_date",
+        "payment_due_date",
         "effective_date",
         "other_date",
         "valuation_date",
         "contract_start",
+        "contract_end",
+        "cancellation_deadline",
+        "renewal_date",
+        "statement_period_start",
+        "statement_period_end",
         "planned_retirement_start",
+        "retirement_start",
+        "event_date",
         "amount",
+        "invoice_total",
+        "monthly_rent",
+        "service_charges",
+        "parking_fee",
+        "total_rent",
+        "deposit",
+        "contract_amount",
+        "account_balance",
+        "valuation",
+        "premium",
+        "refund",
+        "other_amount",
         "monthly_contribution",
         "retirement_assets",
         "cancellation_value",
         "identifier",
         "product_name",
+        "rental_property_address",
+        "tenant_name",
+        "landlord_name",
     ]
     value: str = Field(min_length=1, max_length=500)
     normalized_value: str = Field(min_length=1, max_length=500)
@@ -85,7 +116,7 @@ class IntelligenceCandidate(BaseModel):
 class IntelligenceResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["2"] = "2"
+    schema_version: Literal["3"] = "3"
     document_type: IntelligenceCandidate | None = None
     life_area: IntelligenceCandidate | None = None
     title: IntelligenceCandidate | None = None
@@ -126,20 +157,49 @@ class IntelligenceResult(BaseModel):
                 self.dates,
                 {
                     "document_date",
+                    "invoice_date",
                     "due_date",
+                    "payment_due_date",
                     "effective_date",
                     "other_date",
                     "valuation_date",
                     "contract_start",
+                    "contract_end",
+                    "cancellation_deadline",
+                    "renewal_date",
+                    "statement_period_start",
+                    "statement_period_end",
                     "planned_retirement_start",
+                    "retirement_start",
+                    "event_date",
                 },
             ),
             (
                 self.amounts,
-                {"amount", "monthly_contribution", "retirement_assets", "cancellation_value"},
+                {
+                    "amount",
+                    "invoice_total",
+                    "monthly_rent",
+                    "service_charges",
+                    "parking_fee",
+                    "total_rent",
+                    "deposit",
+                    "contract_amount",
+                    "account_balance",
+                    "valuation",
+                    "premium",
+                    "refund",
+                    "other_amount",
+                    "monthly_contribution",
+                    "retirement_assets",
+                    "cancellation_value",
+                },
             ),
             (self.identifiers, {"identifier"}),
-            (self.semantic_facts, {"product_name"}),
+            (
+                self.semantic_facts,
+                {"product_name", "rental_property_address", "tenant_name", "landlord_name"},
+            ),
         ):
             if any(candidate.field_name not in fields for candidate in candidates):
                 raise ValueError("Candidate is in the wrong result section")

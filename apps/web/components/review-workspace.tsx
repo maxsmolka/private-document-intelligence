@@ -22,6 +22,41 @@ import {
 const areas: LifeArea[] = ["finance", "insurance", "vehicle", "home", "health", "tax", "work", "travel", "personal", "other"];
 function label(value: string) { return value.replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase()); }
 
+const proposalPriorities: Record<string, number> = {
+  cancellation_deadline: 100,
+  payment_due_date: 100,
+  due_date: 100,
+  contract_end: 95,
+  contract_start: 95,
+  invoice_total: 94,
+  total_rent: 94,
+  account_balance: 92,
+  document_type: 90,
+  organization: 88,
+  identifier: 86,
+  product_name: 84,
+  title: 80,
+  life_area: 78,
+  document_date: 76,
+  invoice_date: 76,
+  other_date: 10,
+  other_amount: 10,
+  amount: 8,
+};
+
+export function rankMetadataProposals(proposals: MetadataProposal[]): MetadataProposal[] {
+  return proposals
+    .map((proposal, index) => ({ proposal, index }))
+    .sort((left, right) =>
+      (proposalPriorities[right.proposal.field_name] ?? 50) -
+        (proposalPriorities[left.proposal.field_name] ?? 50) ||
+      Number(right.proposal.is_critical) - Number(left.proposal.is_critical) ||
+      (right.proposal.confidence ?? 0) - (left.proposal.confidence ?? 0) ||
+      left.index - right.index,
+    )
+    .map(({ proposal }) => proposal);
+}
+
 export function ReviewWorkspace({ detail, queue }: { detail: ReviewDetail; queue: ReviewItem[] }) {
   return <ReviewWorkspaceDocument key={detail.document.id} detail={detail} queue={queue} />;
 }
@@ -29,7 +64,7 @@ export function ReviewWorkspace({ detail, queue }: { detail: ReviewDetail; queue
 function ReviewWorkspaceDocument({ detail, queue }: { detail: ReviewDetail; queue: ReviewItem[] }) {
   const router = useRouter();
   const document = detail.document;
-  const [pendingProposals, setPendingProposals] = useState(() => detail.proposals.filter((item) => item.status === "pending"));
+  const [pendingProposals, setPendingProposals] = useState(() => rankMetadataProposals(detail.proposals.filter((item) => item.status === "pending")));
   const [reviewQueue, setReviewQueue] = useState(queue);
   const [completed, setCompleted] = useState(false);
   const proposed = useMemo(() => Object.fromEntries(pendingProposals.map((item) => [item.field_name, item.proposed_value])), [pendingProposals]);

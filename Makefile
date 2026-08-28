@@ -37,7 +37,7 @@ benchmark-ocr:
 	cd apps/api && uv run pdi-benchmark-ocr benchmark-corpus --output benchmark-results.json
 
 benchmark-intelligence:
-	cd apps/api && uv run pdi-benchmark-intelligence tests/fixtures/intelligence_corpus.json --output intelligence-results.json
+	cd apps/api && uv run pdi-benchmark-intelligence tests/fixtures/intelligence_corpus_v1.json --output intelligence-results.json --enforce-budgets
 
 benchmark-retrieval:
 	docker compose exec -T api pdi-benchmark-retrieval benchmark-corpus/retrieval.json

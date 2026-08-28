@@ -78,7 +78,8 @@ AMOUNT_PATTERN = re.compile(
     re.IGNORECASE,
 )
 ORGANIZATION_PATTERN = re.compile(
-    r"(?im)^(?P<organization>[^\n]{2,100}\b(?:GmbH|AG|SE|e[.]\s?V[.]|KG|OHG|Versicherung))\s*$"
+    r"(?im)^\s*(?:(?:Vermieter|Aussteller|Absender)\s*:\s*)?"
+    r"(?P<organization>[^\n:]{2,100}\b(?:GmbH|AG|SE|e[.]\s?V[.]|KG|OHG))\s*$"
 )
 IDENTIFIER_PATTERN = re.compile(
     r"(?im)\b(?P<label>Rechnungs(?:nummer|nr[.]?)|Vertrags(?:nummer|nr[.]?)|"
@@ -88,6 +89,11 @@ IDENTIFIER_PATTERN = re.compile(
 
 TYPE_RULES: tuple[tuple[str, str, float], ...] = (
     (
+        "rental_contract",
+        r"\b(?:Wohnraum)?Mietvertrag\b|\bMietverhältnis\b.*\b(?:Mieter|Vermieter)\b",
+        0.995,
+    ),
+    (
         "pension_statement",
         r"\b(?:Wertmitteilung|Standmitteilung|Jahresmitteilung)\b.*\b(?:Riester\w*|Rente|Altersvorsorge)\b",
         0.99,
@@ -96,15 +102,28 @@ TYPE_RULES: tuple[tuple[str, str, float], ...] = (
     ("invoice", r"\bRechnung\b|\bRechnungsnummer\b", 0.94),
     ("receipt", r"\bKassenbon\b|\bQuittung\b", 0.92),
     ("bank_statement", r"\bKontoauszug\b", 0.95),
+    (
+        "insurance_statement",
+        r"\b(?:Jahres|Stand|Wert)mitteilung\b.*\b(?:Versicherung|Police|Vertrag)\b",
+        0.94,
+    ),
     ("insurance_notice", r"\bVersicherung\b.*\b(?:Beitrag|Anpassung|Mitteilung)\b", 0.88),
     ("tax_document", r"\bFinanzamt\b|\bSteuerbescheid\b", 0.95),
     ("contract", r"\bVertrag\b|\bVertragsnummer\b", 0.92),
+    (
+        "official_notice",
+        r"\b(?:Bescheid|Verfügung|Mahnung)\b.*\b(?:Aktenzeichen|Widerspruch)\b",
+        0.97,
+    ),
     ("official_letter", r"\bBezirksamt\b|\bAktenzeichen\b|\bBehörde\b", 0.90),
+    ("certificate", r"\bBescheinigung\b|\bZertifikat\b|\bUrkunde\b", 0.91),
+    ("warranty", r"\bGarantie(?:schein|urkunde)?\b|\bGewährleistung\b", 0.91),
     ("medical_document", r"\bArzt\b|\bDiagnose\b|\bPatient\b", 0.85),
     ("vehicle_document", r"\bFahrzeug\b|\bKennzeichen\b|\bKfz\b", 0.90),
     ("employment_document", r"\bArbeitsvertrag\b|\bGehaltsabrechnung\b", 0.94),
     ("travel_document", r"\bBuchungsnummer\b|\bReise\b|\bFlug\b", 0.84),
     ("generic_letter", r"Sehr geehrte|Mit freundlichen Grüßen", 0.75),
+    ("correspondence", r"\bBetreff\s*:|\bIhr Schreiben vom\b", 0.80),
 )
 
 LIFE_AREAS = {
@@ -120,12 +139,37 @@ LIFE_AREAS = {
     "travel_document": "travel",
     "contract": "personal",
     "official_letter": "personal",
+    "official_notice": "personal",
     "generic_letter": "other",
     "pension_statement": "insurance",
+    "insurance_statement": "insurance",
+    "rental_contract": "home",
+    "correspondence": "personal",
+    "certificate": "personal",
+    "warranty": "personal",
+    "other": "other",
 }
 
 PRODUCT_PATTERN = re.compile(
     r"(?im)\b(?P<product>RiesterRente\s+[A-ZÄÖÜ0-9][A-ZÄÖÜ0-9 +&-]{2,80})\s*$"
+)
+
+SEMANTIC_LINE_PATTERNS: tuple[tuple[str, re.Pattern[str], str], ...] = (
+    (
+        "rental_property_address",
+        re.compile(r"(?im)^\s*(?:Mietobjekt|Wohnung|Objekt)\s*:\s*(?P<value>[^\n]{4,160})$"),
+        "explicit_rental_address",
+    ),
+    (
+        "tenant_name",
+        re.compile(r"(?im)^\s*Mieter(?:in)?\s*:\s*(?P<value>[^\n]{2,120})$"),
+        "explicit_rental_party",
+    ),
+    (
+        "landlord_name",
+        re.compile(r"(?im)^\s*Vermieter(?:in)?\s*:\s*(?P<value>[^\n]{2,120})$"),
+        "explicit_rental_party",
+    ),
 )
 
 
@@ -153,7 +197,7 @@ def normalized_amount(value: str) -> Decimal:
 
 class DeterministicIntelligenceProvider:
     name = "deterministic"
-    provider_version = "1.1.0"
+    provider_version = "1.2.0"
     schema_version = SCHEMA_VERSION
     prompt_version = None
 
@@ -194,6 +238,10 @@ class DeterministicIntelligenceProvider:
                 line_end = len(document.text)
             context = document.text[line_start:line_end]
             lowered = context.lower()
+            relative_offset = match.start() - line_start
+            period_line = re.search(r"(?:kontoauszug|abrechnungszeitraum|zeitraum)", lowered)
+            period_start = re.search(r"\b(?:vom|von)\b", lowered)
+            period_end = re.search(r"\b(?:bis|zum)\b", lowered)
             if re.search(
                 r"wertmitteilung\s+zum|bewertungsstichtag|stand\s+zum|"
                 r"(?:altersvorsorgevermögen|kündigungswert|rückkaufswert).*\bzum\b",
@@ -202,19 +250,35 @@ class DeterministicIntelligenceProvider:
                 field, base = "valuation_date", 0.97
             elif re.search(r"(?:geplanter\s+)?rentenbeginn|renteneintritt", lowered):
                 field, base = "planned_retirement_start", 0.97
+            elif re.search(r"(?:mietende|vertragsende|laufzeit\s+bis)", lowered):
+                field, base = "contract_end", 0.97
+            elif re.search(r"(?:kündigung|kündigen)\s+(?:bis|spätestens)", lowered):
+                field, base = "cancellation_deadline", 0.97
+            elif re.search(r"(?:verlängerung|erneuert|renewal)", lowered):
+                field, base = "renewal_date", 0.95
+            elif period_line and period_end and relative_offset > period_end.end():
+                field, base = "statement_period_end", 0.95
+            elif period_line and period_start and relative_offset > period_start.end():
+                field, base = "statement_period_start", 0.95
             elif re.search(r"versicherungsbeginn|vertragsbeginn|mietverhältnis\s+beginnt", lowered):
                 field, base = "contract_start", 0.97
             elif re.search(r"fällig|zahlbar|rechnungsbetrag\s+bis", lowered):
-                field, base = "due_date", 0.94
+                field, base = "payment_due_date", 0.94
             elif re.search(r"beginn|gültig|wirksam|\bab\b", lowered):
                 field, base = "effective_date", 0.92
             elif re.search(
                 r"rechnungsdatum|bescheiddatum|ausstellungsdatum|dokumentdatum|\bdatum\b|\b\w+,\s+den\b",
                 lowered,
             ):
-                field, base = "document_date", 0.93
+                field = "invoice_date" if "rechnungsdatum" in lowered else "document_date"
+                base = 0.93
+            elif re.search(
+                r"(?:ereignis|termin|schadenstag|leistungsdatum|widerspruch|antwort|einreichen|vom)\b",
+                lowered,
+            ):
+                field, base = "event_date", 0.84
             else:
-                field, base = "other_date", 0.68
+                continue
             score, notes = confidence(
                 base,
                 ocr_sensitive=document.ocr_sensitive,
@@ -257,12 +321,20 @@ class DeterministicIntelligenceProvider:
             context = document.text[
                 max(0, match.start() - 60) : min(len(document.text), match.end() + 40)
             ]
-            if re.search(r"(?i)monatlicher\s+beitrag|monatsbeitrag", line_context):
-                field, base, semantic_notes = (
-                    "monthly_contribution",
-                    0.97,
-                    ["explicit_financial_label"],
-                )
+            if re.search(r"(?i)gesamtmiete|warmmiete", line_context):
+                field, base, semantic_notes = "total_rent", 0.98, ["explicit_financial_label"]
+            elif re.search(r"(?i)grundmiete|nettokaltmiete|kaltmiete", line_context):
+                field, base, semantic_notes = "monthly_rent", 0.98, ["explicit_financial_label"]
+            elif re.search(r"(?i)nebenkosten|betriebskosten|service charges", line_context):
+                field, base, semantic_notes = "service_charges", 0.97, ["explicit_financial_label"]
+            elif re.search(r"(?i)stellplatz|garage|parkplatz", line_context):
+                field, base, semantic_notes = "parking_fee", 0.97, ["explicit_financial_label"]
+            elif re.search(r"(?i)kaution|mietsicherheit", line_context):
+                field, base, semantic_notes = "deposit", 0.98, ["explicit_financial_label"]
+            elif re.search(
+                r"(?i)rechnungs(?:gesamt)?betrag|gesamtbetrag|zu\s+zahlen", line_context
+            ):
+                field, base, semantic_notes = "invoice_total", 0.98, ["explicit_financial_label"]
             elif re.search(
                 r"(?i)(?:aktuelles\s+)?(?:altersvorsorge|renten)vermögen|vertragsguthaben",
                 line_context,
@@ -278,11 +350,26 @@ class DeterministicIntelligenceProvider:
                     0.97,
                     ["explicit_current_value"],
                 )
+            elif re.search(r"(?i)(?:schluss|end|konto)saldo|kontostand|guthaben", line_context):
+                field, base, semantic_notes = "account_balance", 0.97, ["explicit_financial_label"]
+            elif re.search(r"(?i)erstattung|rückerstattung", line_context):
+                field, base, semantic_notes = "refund", 0.97, ["explicit_financial_label"]
+            elif re.search(
+                r"(?i)prämie|versicherungsbeitrag|jahresbeitrag|^\s*beitrag\s*:", line_context
+            ):
+                field, base, semantic_notes = "premium", 0.97, ["explicit_financial_label"]
+            elif re.search(r"(?i)vertragssumme|auftragswert", line_context):
+                field, base, semantic_notes = "contract_amount", 0.96, ["explicit_financial_label"]
+            elif re.search(r"(?i)monatlicher\s+beitrag|monatsbeitrag", line_context):
+                field, base, semantic_notes = (
+                    "monthly_contribution",
+                    0.97,
+                    ["explicit_financial_label"],
+                )
+            elif re.search(r"(?i)betrag|summe|nachzahlung|entgelt", context):
+                field, base, semantic_notes = "other_amount", 0.82, ["explicit_but_untyped_amount"]
             else:
-                field = "amount"
-                strong = bool(re.search(r"(?i)gesamt|betrag|summe|beitrag|nachzahlung", context))
-                base = 0.95 if strong else 0.72
-                semantic_notes = []
+                continue
             score, confidence_notes = confidence(
                 base,
                 ocr_sensitive=document.ocr_sensitive,
@@ -310,20 +397,39 @@ class DeterministicIntelligenceProvider:
 
     def _semantic_facts(self, document: DocumentContext) -> list[IntelligenceCandidate]:
         match = PRODUCT_PATTERN.search(document.text)
-        if match is None:
-            return []
-        value = " ".join(match.group("product").split())
-        return [
-            IntelligenceCandidate(
-                field_name="product_name",
-                value=value,
-                normalized_value=value,
-                structured_value={"product_name": value},
-                confidence=0.97,
-                evidence=[document.evidence(match.start("product"), match.end("product"))],
-                validation_notes=["explicit_product_name"],
+        output: list[IntelligenceCandidate] = []
+        if match is not None:
+            value = " ".join(match.group("product").split())
+            output.append(
+                IntelligenceCandidate(
+                    field_name="product_name",
+                    value=value,
+                    normalized_value=value,
+                    structured_value={"product_name": value},
+                    confidence=0.97,
+                    evidence=[document.evidence(match.start("product"), match.end("product"))],
+                    validation_notes=["explicit_product_name"],
+                )
             )
-        ]
+        for field, pattern, note in SEMANTIC_LINE_PATTERNS:
+            if semantic_match := pattern.search(document.text):
+                value = " ".join(semantic_match.group("value").split())
+                output.append(
+                    IntelligenceCandidate(
+                        field_name=field,
+                        value=value,
+                        normalized_value=value,
+                        structured_value={field: value},
+                        confidence=0.96,
+                        evidence=[
+                            document.evidence(
+                                semantic_match.start("value"), semantic_match.end("value")
+                            )
+                        ],
+                        validation_notes=[note],
+                    )
+                )
+        return output
 
     def _organizations(self, document: DocumentContext) -> list[IntelligenceCandidate]:
         output: list[IntelligenceCandidate] = []

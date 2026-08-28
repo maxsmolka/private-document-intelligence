@@ -40,6 +40,20 @@ Modellrechnung bei 4 %: 24.000,00 EUR
 Modellrechnung bei 6 %: 36.000,00 EUR
 """
 
+RENTAL_CONTRACT = """Wohnraummietvertrag
+Vermieter: Muster Hausverwaltung GmbH
+Mieter: Max Mustermann
+Mietobjekt: Lindenstraße 10, 10969 Berlin
+Vertragsnummer: MV-2026-77
+Mietverhältnis beginnt: 01.10.2026
+Grundmiete monatlich: 900,00 EUR
+Betriebskosten: 180,00 EUR
+Stellplatz: 60,00 EUR
+Gesamtmiete: 1.140,00 EUR
+Mietsicherheit: 2.700,00 EUR
+Kündigung spätestens 30.06.2027
+"""
+
 
 async def test_deterministic_provider_returns_normalized_grounded_candidates() -> None:
     result = await DeterministicIntelligenceProvider().analyze(
@@ -55,7 +69,8 @@ async def test_deterministic_provider_returns_normalized_grounded_candidates() -
     assert result.life_area is not None
     assert result.life_area.normalized_value == "insurance"
     assert [item.normalized_value for item in result.amounts] == ["1234.56 EUR"]
-    assert {item.field_name for item in result.dates} == {"document_date", "due_date"}
+    assert result.amounts[0].field_name == "invoice_total"
+    assert {item.field_name for item in result.dates} == {"invoice_date", "payment_due_date"}
     assert result.identifiers[0].normalized_value == "POL-2026-991"
     for candidate in result.candidates():
         for evidence in candidate.evidence:
@@ -82,7 +97,9 @@ async def test_invoice_due_date_uses_explicit_german_payment_anchor(
             extraction_method="native_pdf",
         )
     )
-    due_dates = [item.normalized_value for item in result.dates if item.field_name == "due_date"]
+    due_dates = [
+        item.normalized_value for item in result.dates if item.field_name == "payment_due_date"
+    ]
     assert due_dates == [expected]
 
 
@@ -96,7 +113,7 @@ async def test_invoice_without_due_date_does_not_fabricate_one() -> None:
             extraction_method="native_pdf",
         )
     )
-    assert not any(item.field_name == "due_date" for item in result.dates)
+    assert not any(item.field_name == "payment_due_date" for item in result.dates)
 
 
 async def test_pension_statement_emits_typed_facts_and_suppresses_scenarios() -> None:
@@ -129,6 +146,70 @@ async def test_pension_statement_emits_typed_facts_and_suppresses_scenarios() ->
     assert all(
         "Modellrechnung" not in span.text for item in result.amounts for span in item.evidence
     )
+
+
+async def test_rental_contract_emits_parties_address_terms_and_ocr_penalty() -> None:
+    result = await DeterministicIntelligenceProvider().analyze(
+        DocumentContext(
+            text=RENTAL_CONTRACT,
+            pages=[RENTAL_CONTRACT],
+            original_filename="mietvertrag.pdf",
+            extraction_method="ocr_pdf",
+        )
+    )
+    assert result.document_type is not None
+    assert result.document_type.normalized_value == "rental_contract"
+    assert result.life_area is not None and result.life_area.normalized_value == "home"
+    assert {item.field_name: item.normalized_value for item in result.dates} == {
+        "contract_start": "2026-10-01",
+        "cancellation_deadline": "2027-06-30",
+    }
+    assert {item.field_name: item.normalized_value for item in result.amounts} == {
+        "monthly_rent": "900.00 EUR",
+        "service_charges": "180.00 EUR",
+        "parking_fee": "60.00 EUR",
+        "total_rent": "1140.00 EUR",
+        "deposit": "2700.00 EUR",
+    }
+    assert {item.field_name: item.normalized_value for item in result.semantic_facts} == {
+        "landlord_name": "Muster Hausverwaltung GmbH",
+        "tenant_name": "Max Mustermann",
+        "rental_property_address": "Lindenstraße 10, 10969 Berlin",
+    }
+    assert all(
+        "ocr_sensitive_value" in item.validation_notes
+        for item in [*result.dates, *result.amounts, *result.identifiers]
+    )
+
+
+async def test_unanchored_numbers_dates_and_scenario_values_do_not_create_noise() -> None:
+    text = "Interne Notiz\n01.01.2026\n42,00 EUR\nBeispielrechnung bei 4 %: 10.000,00 EUR"
+    result = await DeterministicIntelligenceProvider().analyze(
+        DocumentContext(
+            text=text,
+            pages=[text],
+            original_filename="note.txt",
+            extraction_method="native",
+        )
+    )
+    assert result.dates == []
+    assert result.amounts == []
+
+
+async def test_statement_period_on_one_line_assigns_start_and_end() -> None:
+    text = "Kontoauszug\nZeitraum von 01.07.2026 bis 31.07.2026"
+    result = await DeterministicIntelligenceProvider().analyze(
+        DocumentContext(
+            text=text,
+            pages=[text],
+            original_filename="statement.pdf",
+            extraction_method="native_pdf",
+        )
+    )
+    assert [(item.field_name, item.normalized_value) for item in result.dates] == [
+        ("statement_period_start", "2026-07-01"),
+        ("statement_period_end", "2026-07-31"),
+    ]
 
 
 async def seed_document(session: AsyncSession) -> tuple[Document, DocumentExtraction]:
