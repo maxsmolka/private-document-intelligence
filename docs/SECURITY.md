@@ -4,6 +4,8 @@
 
 PDI has local authentication but is still intended for a private network or VPN, not direct public-Internet exposure. Replace example credentials, terminate TLS at a trusted reverse proxy, enable secure cookies, restrict database/API ports, and back up PostgreSQL and document storage together.
 
+Treat effective Compose output as sensitive: raw `docker compose config` expands database URLs, passwords, and other environment values. Use targeted service/image queries or locally redacted output for diagnostics. NAS ACLs should grant the scanner only its consume inbox and grant the non-root PDI identity the minimum traverse/read/write/move access described in [NAS_DEPLOYMENT.md](NAS_DEPLOYMENT.md); do not use world-writable storage as a permission workaround.
+
 ## Current safeguards
 
 - UUID identifiers, server-generated storage keys, basename-only display names, and storage-root containment

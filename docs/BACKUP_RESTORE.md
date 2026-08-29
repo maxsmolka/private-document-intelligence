@@ -22,3 +22,5 @@ docker compose exec -T api pdi storage reconcile
 ```
 
 Restore refuses corrupt backups and non-empty targets. `--force` uses `pg_restore --clean --if-exists` and may overwrite storage; it is an explicit data-loss operation. Backups and exports contain sensitive plaintext document data and must receive the same access controls as originals.
+
+On the confirmed NAS deployment, backup and restore must use the same authoritative document bind as API, worker, consume, and mail: `<NAS_PDI_ROOT>/documents:/data/documents`. Keep the private host root outside source control. Do not restore into a Docker named volume while the application services use that host bind, or vice versa. Verify the effective mount, download a synthetic original, run storage reconciliation, and verify the resulting backup before declaring recovery complete.

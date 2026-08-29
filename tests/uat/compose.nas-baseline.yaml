@@ -1,0 +1,34 @@
+services:
+  api:
+    volumes:
+      - type: bind
+        source: ${PDI_DOCUMENTS_HOST_PATH:?set a synthetic validation path}
+        target: /data/documents
+
+  worker:
+    volumes:
+      - type: bind
+        source: ${PDI_DOCUMENTS_HOST_PATH:?set a synthetic validation path}
+        target: /data/documents
+
+  backup-scheduler:
+    volumes:
+      - type: bind
+        source: ${PDI_DOCUMENTS_HOST_PATH:?set a synthetic validation path}
+        target: /data/documents
+
+  consume:
+    volumes:
+      - type: bind
+        source: ${PDI_DOCUMENTS_HOST_PATH:?set a synthetic validation path}
+        target: /data/documents
+
+  mail:
+    volumes:
+      - type: bind
+        source: ${PDI_DOCUMENTS_HOST_PATH:?set a synthetic validation path}
+        target: /data/documents
+
+  web:
+    ports:
+      - "8020:3000"

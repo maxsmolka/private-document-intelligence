@@ -8,6 +8,18 @@
     },
     "worker": {
       "image": "ghcr.io/maxsmolka/private-document-intelligence/backend@sha256:8780616a7863a0f9e27890689afd7821fadb098e4056deb2c125711d8a445473"
+    },
+    "backup-scheduler": {
+      "image": "ghcr.io/maxsmolka/private-document-intelligence/backend@sha256:8780616a7863a0f9e27890689afd7821fadb098e4056deb2c125711d8a445473"
+    },
+    "reminder-scheduler": {
+      "image": "ghcr.io/maxsmolka/private-document-intelligence/backend@sha256:8780616a7863a0f9e27890689afd7821fadb098e4056deb2c125711d8a445473"
+    },
+    "consume": {
+      "image": "ghcr.io/maxsmolka/private-document-intelligence/backend@sha256:8780616a7863a0f9e27890689afd7821fadb098e4056deb2c125711d8a445473"
+    },
+    "mail": {
+      "image": "ghcr.io/maxsmolka/private-document-intelligence/backend@sha256:8780616a7863a0f9e27890689afd7821fadb098e4056deb2c125711d8a445473"
     }
   }
 }

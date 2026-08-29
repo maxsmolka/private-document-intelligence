@@ -10,7 +10,7 @@
 4. Push the tag. The release workflow revalidates code, builds `linux/amd64` images, and pushes immutable version tags to GHCR.
 5. Confirm the workflow-created GitHub Release, public anonymous pulls, OCI labels, SBOM/provenance attestations, and a disposable synthetic Compose smoke test.
 
-Images are published as `ghcr.io/maxsmolka/private-document-intelligence/backend` and `/web` with the full release, minor, major, and `latest` tags. Deployments should pin the full version or digest. v1.2 supports `linux/amd64`; additional architectures require native OCR and full runtime qualification.
+Images are published as `ghcr.io/maxsmolka/private-document-intelligence/backend` and `/web` with the full release, minor, major, and `latest` tags. Deployments should pin the full version or digest. The current v1.4 release baseline supports `linux/amd64`; additional architectures require native OCR and full runtime qualification.
 
 BuildKit provenance and SPDX SBOM attestations are emitted for both images. Keyless container signing is intentionally deferred until an explicit verification policy and stable signer identity are documented; attestations plus immutable digests are the current supply-chain baseline.
 

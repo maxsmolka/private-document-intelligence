@@ -42,7 +42,7 @@ services:
     restart: unless-stopped
 
   api:
-    image: ghcr.io/maxsmolka/private-document-intelligence/backend:${PDI_VERSION:-1.2.0}
+    image: ghcr.io/maxsmolka/private-document-intelligence/backend:${PDI_VERSION:-1.4.1}
     environment:
       <<: *backend-environment
       PDI_CORS_ORIGINS: '["${PDI_PUBLIC_URL:?set in .env.release}"]'
@@ -63,7 +63,7 @@ services:
     restart: unless-stopped
 
   worker:
-    image: ghcr.io/maxsmolka/private-document-intelligence/backend:${PDI_VERSION:-1.2.0}
+    image: ghcr.io/maxsmolka/private-document-intelligence/backend:${PDI_VERSION:-1.4.1}
     command: ["pdi-worker"]
     environment:
       <<: *backend-environment
@@ -85,7 +85,7 @@ services:
     restart: unless-stopped
 
   backup-scheduler:
-    image: ghcr.io/maxsmolka/private-document-intelligence/backend:${PDI_VERSION:-1.2.0}
+    image: ghcr.io/maxsmolka/private-document-intelligence/backend:${PDI_VERSION:-1.4.1}
     command: ["pdi-backup-scheduler"]
     environment:
       <<: *backend-environment
@@ -101,7 +101,7 @@ services:
     restart: unless-stopped
 
   reminder-scheduler:
-    image: ghcr.io/maxsmolka/private-document-intelligence/backend:${PDI_VERSION:-1.2.0}
+    image: ghcr.io/maxsmolka/private-document-intelligence/backend:${PDI_VERSION:-1.4.1}
     command: ["pdi-reminder-scheduler"]
     environment:
       <<: *backend-environment
@@ -114,7 +114,7 @@ services:
 
   consume:
     profiles: ["consume"]
-    image: ghcr.io/maxsmolka/private-document-intelligence/backend:${PDI_VERSION:-1.2.0}
+    image: ghcr.io/maxsmolka/private-document-intelligence/backend:${PDI_VERSION:-1.4.1}
     command: ["pdi-consume"]
     environment:
       <<: *backend-environment
@@ -137,7 +137,7 @@ services:
 
   mail:
     profiles: ["mail"]
-    image: ghcr.io/maxsmolka/private-document-intelligence/backend:${PDI_VERSION:-1.2.0}
+    image: ghcr.io/maxsmolka/private-document-intelligence/backend:${PDI_VERSION:-1.4.1}
     command: ["pdi-mail"]
     environment:
       <<: *backend-environment
@@ -161,7 +161,7 @@ services:
     restart: unless-stopped
 
   web:
-    image: ghcr.io/maxsmolka/private-document-intelligence/web:${PDI_VERSION:-1.2.0}
+    image: ghcr.io/maxsmolka/private-document-intelligence/web:${PDI_VERSION:-1.4.1}
     environment:
       PDI_API_INTERNAL_URL: http://api:8000
       PDI_AUTH_ENABLED: "true"
