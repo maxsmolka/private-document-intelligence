@@ -1,14 +1,16 @@
 # Architecture
 
+> **Final baseline:** This architecture is frozen at PDI v1.4.1 and schema `20260828_0020`. Feature development is paused and there is no active milestone. See the [final architecture snapshot](FINAL_ARCHITECTURE.md) for the closure view.
+
 The [A1 architecture checkpoint](A1_ARCHITECTURE_CHECKPOINT.md) defines the post-v1.1 stable core, state ownership, invalidation, extension/Atlas/compute boundaries and architecture guardrails. Its [performance baseline](A1_PERFORMANCE_BASELINE.md) records synthetic 100/1,000/10,000-row measurements and regression budgets.
 
 ## Goals and boundaries
 
 PDI is the authoritative, local-first system of record for documents, originals, extracted text, metadata, review state, search, and document lifecycle. It is designed for modest home-server and NAS hardware with direct data flow, explicit schema evolution, and replaceable components only where a concrete alternative exists.
 
-Atlas Personal Intelligence is a future API consumer. Atlas may reason over PDI data and retain derived reasoning, but it must never read PDI's PostgreSQL database or storage volume. PDI-derived facts remain authoritative in PDI.
+Atlas Personal Intelligence is an external, unscheduled API-consumer concept. No Atlas integration is implemented or being developed from PDI. Any future consumer must never read PDI's PostgreSQL database or storage volume; PDI-derived facts remain authoritative in PDI.
 
-Semantic search, embeddings, Atlas implementation, external notification delivery, and chat remain outside PDI. PDI does provide private, durable in-app deadline reminders. Milestone 6 adds authentication, read-only Paperless migration, external ingestion, coordinated recovery, open export, and operational readiness.
+Semantic search, embeddings, Atlas implementation, external notification delivery, and chat remain outside the final baseline. PDI does provide private, durable in-app deadline reminders. The v1.4.1 baseline includes authentication, read-only Paperless migration, external ingestion, coordinated recovery, open export, and operational readiness.
 
 ## System context
 
@@ -21,7 +23,7 @@ flowchart LR
     Q["Ingestion worker"] --> P
     Q --> S
     C["Consume / IMAP / Paperless"] --> A
-    X["Future Atlas"] -. "scoped versioned API only" .-> A
+    X["External consumer (unscheduled)"] -. "scoped versioned API only" .-> A
 ```
 
 The API and worker use one immutable Python image with separate entrypoints. The API applies Alembic migrations before becoming healthy; the worker waits for API health during Compose startup, then operates independently.
@@ -70,7 +72,7 @@ Failures retain a sanitized category/message. Attempts below the bound return to
 
 PyPDF handles digital PDFs. Text is normalized with Unicode NFKC, CRLF/CR conversion, trailing-space removal, maximum two consecutive newlines, and outer whitespace removal. The deterministic heuristic measures total characters and useful/empty pages. Any page below 40 non-whitespace characters requests OCR, with an explainable reason such as `2_of_4_pages_without_usable_text`; this prevents mixed PDFs from silently losing scanned pages.
 
-OCRmyPDF 14.0.1 with Tesseract 5.3.0 is the scanned-PDF default. It uses `--skip-text`, so native pages remain intact while scanned pages are OCRed; deskew and bounded-confidence rotation are enabled. The searchable PDF becomes a derived asset and its text is parsed through the same PyPDF normalization path. PNG/JPEG inputs use Tesseract directly and the same `DocumentExtraction` model.
+The final release image uses OCRmyPDF 16.7.0 with Tesseract 5.5.0 as the scanned-PDF default. It uses `--skip-text`, so native pages remain intact while scanned pages are OCRed; deskew and bounded-confidence rotation are enabled. The searchable PDF becomes a derived asset and its text is parsed through the same PyPDF normalization path. PNG/JPEG inputs use Tesseract directly and the same `DocumentExtraction` model.
 
 ```mermaid
 flowchart TD
@@ -116,6 +118,6 @@ marks re-analysis as required without rewriting historical evidence or accepted 
 
 Completed intelligence runs feed a shared deterministic proposal stage. Canonical organizations, contracts, document relationships, events, deadlines, and actions exist only after evidence-gated review. Explicit relational tables and foreign keys keep provenance and common navigation straightforward; append-only history records decisions and state changes. Exact alias resolution may suggest a link, but only an explicit merge can consolidate organizations. Accepted organization/contract values and merge results refresh the M4 search projection in the same transaction. See [Document knowledge](KNOWLEDGE.md), [benchmark](KNOWLEDGE_BENCHMARK.md), and [ADR 0004](adr/0004-relational-review-first-knowledge.md).
 
-## Future direction
+## Frozen external boundaries
 
-Chat, embeddings, external notification channels, richer entity types, and Atlas integration remain future work; Atlas continues to consume only stable HTTP APIs.
+Chat, embeddings, external notification channels, richer entity types, Atlas integration, and Compute Core integration are outside the final baseline and are not currently scheduled. Any future external consumer must use stable scoped HTTP APIs. The historical decision gates are retained in [FUTURE_ROADMAP.md](FUTURE_ROADMAP.md).

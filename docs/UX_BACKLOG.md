@@ -1,6 +1,6 @@
-# UX Backlog
+# Historical UX backlog
 
-These observations remain after the v1.0 product-experience milestone. Completed v1.0 work is documented in `UX.md`.
+These observations were recorded after the v1.0 product-experience milestone. Feature development is paused after v1.4.1; every item below is retained for historical context and is not currently scheduled. Completed work is documented in `UX.md`.
 
 ## Review and evidence
 
@@ -34,9 +34,9 @@ These observations remain after the v1.0 product-experience milestone. Completed
 - Add richer skeletons for knowledge and detail routes.
 - Evaluate dark mode and mobile/PWA offline behavior.
 
-## Future features, not UX fixes
+## Historical feature ideas, not UX fixes
 
 - Atlas integration or chat/“Ask PDI”.
-- Notifications and reminders.
+- External notification delivery. Durable in-app deadline reminders are implemented in the final baseline.
 - Automatic entity merging.
 - Mobile/PWA offline behavior.

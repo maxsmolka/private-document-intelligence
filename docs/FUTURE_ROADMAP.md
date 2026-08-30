@@ -1,8 +1,15 @@
-# Roadmap after PDI v1.4.1
+# Historical roadmap after PDI v1.4.1
 
-PDI v1.4.1 at schema `20260828_0020` is the maintenance baseline. The sequence below is planning, not implemented functionality, and does not authorize changes to a production NAS.
+## Project status
 
-## v1.5 — Ingestion and operations hardening
+- v1.4.1 is the final maintained baseline at schema `20260828_0020`.
+- Feature development is paused.
+- The repository is prepared for archival.
+- There is no active milestone.
+
+The v1.5–v1.8 ideas below are retained for historical context and are **not currently scheduled**. They are not commitments, implemented functionality, or authorization to change a production deployment. Atlas integration will not be developed from PDI during the pause. Compute Core remains external. PP-OCRv6 Medium remains only a documented possible future evaluation.
+
+## Historical proposal: v1.5 — Ingestion and operations hardening
 
 Strengthen the real daily operating path before adding new intelligence features:
 
@@ -16,12 +23,12 @@ Strengthen the real daily operating path before adding new intelligence features
 
 Exit criteria include a documented, reproducible NAS update/rollback exercise with optional sources, one authoritative document store, matching immutable service digests, and no credential disclosure in diagnostics.
 
-## v1.6 — Intelligence quality
+## Historical proposal: v1.6 — Intelligence quality
 
 Improve extraction quality through measured evaluation rather than provider expansion by default. The OCR interface remains provider-neutral and the production baseline remains OCRmyPDF/Tesseract:
 
 - maintain a reproducible German/English corpus covering document classification, organizations, dates, identifiers, amounts, deadlines, invoices, contracts, insurance, tax documents, official notices, tables, forms, small text, columns, rotation/skew, and degraded scans;
-- evaluate PP-OCRv6 Medium as an optional local/offline provider against `ocrmypdf+tesseract`; do not make it a dependency during roadmap work;
+- possibly evaluate PP-OCRv6 Medium as an optional local/offline provider against `ocrmypdf+tesseract`; it is not selected, scheduled, or a dependency;
 - measure character and word error rates, field/identifier/date/amount accuracy, classification and downstream-intelligence impact, false positives, evidence/confidence quality, processing latency, pages per second, batch throughput, failure rate, peak RAM, CPU, and GPU use where available;
 - assess model/image size, startup and model loading, caching, offline operation, amd64/NAS suitability, and whether an optional external inference worker is justified;
 - compare plain text, layout, reading order, bounding boxes, confidence, immutable extraction versions, provider/model identity, canonical extraction comparison, review, retry, and failure isolation;
@@ -30,7 +37,7 @@ Improve extraction quality through measured evaluation rather than provider expa
 
 Automatic selection is explicitly deferred. Later evidence may support a global or per-source provider, fallback, or escalation from insufficient native text and possibly low-confidence Tesseract output, but no such policy is chosen without benchmark data.
 
-## v1.7 — Personal knowledge
+## Historical proposal: v1.7 — Personal knowledge
 
 Build document-backed personal knowledge only on reviewed, persisted evidence:
 
@@ -39,7 +46,7 @@ Build document-backed personal knowledge only on reviewed, persisted evidence:
 - make merge/split, conflict handling, and historical changes explicit and auditable;
 - avoid unsupported date precision, automatic organization merges, or operational actions inferred only from document text. PDI remains the owner of these domains.
 
-## v1.8 — Dashboard
+## Historical proposal: v1.8 — Dashboard
 
 Create a focused operational and personal overview using existing authoritative data:
 
@@ -47,10 +54,10 @@ Create a focused operational and personal overview using existing authoritative 
 - saved searches, smart views, knowledge navigation, and privacy-preserving summaries with direct evidence links and clear stale/error states;
 - no second task store, hidden automation authority, or duplicated document ownership.
 
-## After v1.8 — Atlas extension foundation
+## Historical proposal: after v1.8 — Atlas extension foundation
 
-Assess extension registration, shared PDI identity and authorization, Ask, reasoning, briefings, agents, and cross-source synthesis. The first boundary is a read-only PDI adapter with scoped `search`, `get_document`, `get_evidence`, `organizations`, `contracts`, and `events` capabilities. Atlas must retain PDI UUID/page provenance and never duplicate PDI ownership of documents, OCR/extraction, search, evidence, organizations, contracts, events/deadlines, authentication, settings, operations, or canonical document-derived knowledge.
+This integration is not currently scheduled and will not be developed from PDI during the pause. If assessed elsewhere in the future, the first boundary would be a read-only PDI adapter with scoped `search`, `get_document`, `get_evidence`, `organizations`, `contracts`, and `events` capabilities. Atlas would have to retain PDI UUID/page provenance and never duplicate PDI ownership of documents, OCR/extraction, search, evidence, organizations, contracts, events/deadlines, authentication, settings, operations, or canonical document-derived knowledge.
 
-## Compute Core decision gate
+## Historical Compute Core decision gate
 
-Evaluate a narrow optional `Execution Service → ComputeCoreExecutor → Compute Core` adapter only when measurements show that OCR, local-LLM, embedding, Atlas, batch, or GPU workloads exceed the current execution model. PDI PostgreSQL task state remains authoritative. Do not introduce a second scheduler merely because an integration seam exists.
+Compute Core remains external and is not scheduled for PDI integration. The recorded decision gate was to consider a narrow optional `Execution Service → ComputeCoreExecutor → Compute Core` adapter only if measurements showed that OCR, local-LLM, embedding, Atlas, batch, or GPU workloads exceeded the current execution model. PDI PostgreSQL task state would remain authoritative; an integration seam alone never justified a second scheduler.

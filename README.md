@@ -1,55 +1,93 @@
 # PDI — Private Document Intelligence
 
-PDI is a privacy-first, self-hosted system that turns private files into searchable, reviewable knowledge without making a cloud provider authoritative. It preserves immutable source assets, records extraction provenance, and keeps machine suggestions behind explicit human review.
+> **Status: Project archived / feature development paused after v1.4.1.**
+>
+> PDI was developed as a complete local Document Intelligence platform and is retained as a technical reference and learning baseline. The software remains usable as released; no active milestone or feature-development schedule exists. Archiving the GitHub repository is a separate maintainer action.
 
-Version 1.4.1 is the current maintenance baseline. It completes the standalone Paperless replacement path for a trusted private network, including external ingestion, controlled updates, structured search, deadline reminders, and full-cutover readiness. The current Alembic head remains `20260828_0020`.
+PDI is a privacy-first, self-hosted platform that turns private PDF, JPEG, and PNG files into searchable, reviewable, document-backed knowledge. PostgreSQL remains the authoritative state store, original assets are immutable, and machine-derived metadata or knowledge becomes canonical only through explicit review.
 
-## Capabilities
+The final release is [v1.4.1](https://github.com/maxsmolka/private-document-intelligence/releases/tag/v1.4.1), commit `4ecc77d5fe40d76bcced8dd3bba3a444ca83e4cc`, at Alembic schema `20260828_0020`.
 
-- Safe PDF/JPEG/PNG ingestion with signatures, limits, SHA-256 hashing, duplicate handling, and durable PostgreSQL jobs.
-- Native PDF extraction and bounded OCRmyPDF/Tesseract OCR with immutable originals and content-addressed derived assets.
-- Review-first metadata and knowledge extraction with exact evidence, confidence, provenance, and append-only history.
-- Weighted German PostgreSQL search, identifier-aware ranking, filters, deterministic pagination, and grounded snippets.
-- Organizations, aliases, contracts, relationships, timeline events, deadlines, obligations, and reviewable status changes.
-- Responsive authenticated Next.js workspace for documents, search, review, knowledge, timeline, and upcoming work.
-- Local Admin, User, and Read-only roles with TOTP 2FA, recovery codes, password changes, session revocation, and scoped API-token management.
-- Resumable Paperless migration, watched folders, optional IMAP, verified backups/restores, open export, and readiness reporting.
+## Architecture overview
 
-## Architecture
-
-```text
-Browser
-  │
-  ▼
-Next.js web ─────► FastAPI API ─────► PostgreSQL
-                        │                  │
-                        ▼                  └─ metadata, jobs, audit history
-                 document storage
-                        ▲
-                        │
-                ingestion worker
-             extraction · OCR · intelligence
+```mermaid
+flowchart LR
+    subgraph Sources
+        U[Upload]
+        C[Consume folder]
+        M[IMAP mail]
+        PM[Paperless migration]
+    end
+    U --> API[FastAPI API]
+    C --> API
+    M --> API
+    PM --> API
+    API --> DS[(Document storage)]
+    API --> PG[(PostgreSQL)]
+    PG --> Q[Durable queue]
+    Q --> W[Worker]
+    W --> DS
+    W --> E[Extraction / OCR]
+    E --> I[Evidence-based intelligence]
+    I --> S[PostgreSQL search]
+    I --> K[Knowledge proposals]
+    K --> R[Human review]
+    S --> UI[Next.js UI]
+    R --> UI
+    PG --> UI
+    subgraph Operations
+        B[Backup / restore]
+        UM[Update Manager]
+        H[Readiness / reconciliation]
+        SC[Schedulers]
+    end
+    B --> PG
+    B --> DS
+    UM --> PG
+    H --> PG
+    H --> DS
+    SC --> PG
 ```
 
-Document-bearing services run locally. Deterministic intelligence is the default; optional Ollama integration is explicit and local. PDI belongs on a private network or VPN behind an HTTPS reverse proxy, not directly on the Internet.
+The API, worker, backup scheduler, reminder scheduler, consume service, and mail service share one Python release image. All document-bearing services must use the same authoritative storage. The Next.js UI accesses protected API and document routes through its same-origin proxy. PDI is designed for a trusted private network or VPN behind an HTTPS reverse proxy, not direct Internet exposure.
 
-Atlas is not part of the PDI v1.4.1 baseline; it is reserved as a possible future, external read-only consumer of explicitly approved PDI data.
+The complete frozen architecture and ownership rules are documented in the [final architecture snapshot](docs/FINAL_ARCHITECTURE.md) and [architecture reference](docs/ARCHITECTURE.md).
 
-## Quick start from source
+## Core capabilities
 
-Requirements: Docker Engine and Docker Compose v2.
+- **Ingestion:** validated streaming upload, watched consume folders, optional IMAP, resumable Paperless migration, SHA-256 deduplication, and durable PostgreSQL jobs.
+- **Immutable assets:** original files never change; derived OCR renditions are content-addressed, versioned, and reconciled against database records.
+- **Extraction and OCR:** native PDF extraction plus bounded OCRmyPDF/Tesseract processing for scanned PDFs and images, with provider and version provenance.
+- **Evidence-based intelligence:** deterministic extraction by default, optional local Ollama integration, confidence and exact evidence, and append-only decision history.
+- **Search:** weighted German PostgreSQL full-text search, exact identifier boosts, structured filters and facets, deterministic pagination, and grounded page snippets.
+- **Knowledge layer:** reviewed organizations, aliases, contracts, relationships, events, deadlines, actions, and timelines linked to document evidence.
+- **Review workflows:** separate metadata, extraction-version, and knowledge decisions; machine proposals never silently overwrite canonical state.
+- **Local UI and security:** authenticated responsive workspace, Admin/User/Read-only roles, CSRF protection, TOTP 2FA, recovery codes, session revocation, and scoped API tokens.
+- **Operations:** readiness, storage reconciliation, open export, coordinated backup/restore, schedulers, and a constrained operator-controlled Update Manager.
 
-```bash
-git clone https://github.com/maxsmolka/private-document-intelligence.git
-cd private-document-intelligence
-docker compose up --build -d
+## Document ingestion flow
+
+```mermaid
+flowchart TD
+    A[Upload / Consume / Mail / Migration] --> V[Validate type, size, signature and hash]
+    V --> O[Persist immutable original]
+    O --> J[Commit document and durable job]
+    J --> X[Native extraction]
+    X -->|sufficient text| N[Normalize and version extraction]
+    X -->|OCR required| OCR[Bounded OCRmyPDF / Tesseract]
+    OCR --> D[Persist derived OCR asset]
+    D --> N
+    N --> I[Create evidence-backed proposals]
+    I --> P[Refresh search projection]
+    I --> R[Human review]
+    R --> K[Canonical metadata and knowledge]
 ```
 
-Open <http://localhost:3000> and create the first administrator in the browser setup wizard. API documentation is at <http://localhost:8000/docs>. Compose enables German and English OCR with one conservative worker, and applies database migrations before API startup. Headless installations can still use `docker compose run --rm api pdi user create admin`.
+OCR quality and downstream intelligence quality are measured separately. A better character transcription does not automatically imply better classification, entity extraction, or evidence quality.
 
-Stop with `docker compose down`. Adding `--volumes` permanently deletes the development database and uploaded documents.
+## Deployment model
 
-## Run the released images
+The release baseline uses Docker Compose with PostgreSQL 17, persistent document and backup volumes, an API, worker, two schedulers, web UI, and optional `consume` and `mail` profiles. The managed overlay pins every PDI service to immutable image digests so optional services cannot silently run a different version.
 
 ```bash
 cp .env.release.example .env.release
@@ -57,38 +95,48 @@ cp .env.release.example .env.release
 docker compose --env-file .env.release -f compose.release.yaml up -d
 ```
 
-Open the configured HTTPS URL and complete `/setup`. The release Compose file uses the v1.4.1 backend and web baseline, exposes only the web port, uses persistent volumes, and defaults to secure cookies. When applied last, the managed overlay pins every PDI application service to the operator-verified immutable image digests. Generate and protect the required TOTP encryption key, keep API/database access private, terminate TLS at a trusted proxy, and back up PostgreSQL and document storage together. Synology deployments must also follow the [NAS deployment baseline](docs/NAS_DEPLOYMENT.md).
+Open the configured HTTPS URL and complete `/setup`. Synology installations must also follow the [NAS deployment baseline](docs/NAS_DEPLOYMENT.md). Never expose Compose-expanded secrets in diagnostics, and never mount the Docker socket into the API or web containers.
 
-## Development
-
-Requirements: Python 3.13, [uv](https://docs.astral.sh/uv/), Node.js 22/npm, Docker with Compose v2, and PostgreSQL 17 client tools. `pg_dump` and `pg_restore` are required by the backup/restore integration test.
+For a development-only source checkout:
 
 ```bash
-cp .env.example .env
-docker compose up -d postgres
-
-cd apps/api
-uv sync --locked
-uv run alembic upgrade head
-uv run uvicorn pdi.main:app --reload
-# In another terminal: uv run pdi-worker
-
-cd ../web
-npm ci
-npm run dev
+git clone https://github.com/maxsmolka/private-document-intelligence.git
+cd private-document-intelligence
+docker compose up --build -d
 ```
 
-Quality commands and contribution rules are in [CONTRIBUTING.md](CONTRIBUTING.md). CI runs tests, Ruff, formatting, mypy, Alembic drift detection, ESLint, TypeScript, and a production build.
+Open <http://localhost:3000>. Stop with `docker compose down`; adding `--volumes` permanently deletes the development database and uploaded documents.
 
-## Documentation
+## Controlled update flow
 
-- [Security policy](SECURITY.md) and [security model](docs/SECURITY.md)
-- [Account security and key management](docs/ACCOUNT_SECURITY.md)
-- [Repository and release security](docs/REPOSITORY_SECURITY.md)
-- [Operations](docs/OPERATIONS.md), [controlled updates](docs/UPDATES.md), [backup/restore](docs/BACKUP_RESTORE.md), and [cutover](docs/CUTOVER.md)
-- [NAS deployment baseline](docs/NAS_DEPLOYMENT.md) and [NAS update procedure](docs/NAS_UPDATES.md)
-- [Paperless migration](docs/PAPERLESS_MIGRATION.md), [full-cutover readiness](docs/PAPERLESS_CUTOVER_READINESS.md), and [open export](docs/EXPORT.md)
-- [Architecture](docs/ARCHITECTURE.md) and [future Atlas boundary](docs/ATLAS_INTEGRATION.md)
-- [First-run setup](docs/FIRST_RUN_SETUP.md), [release process](docs/RELEASES.md), and [v1.4.1 notes](docs/releases/v1.4.1.md)
+```mermaid
+flowchart LR
+    P[Preflight] --> B[Create and verify backup]
+    B --> D[Validate manifest and exact digests]
+    D --> S[Drain and stop writers]
+    S --> M[Apply target image / migration policy]
+    M --> R[Restart mandatory services]
+    R --> V[Readiness, search, storage and version checks]
+    V --> C[Completed audit journal]
+    M -->|failure after incompatible migration| BR[Restore coordinated backup]
+```
 
-PDI is released under the [MIT License](LICENSE). Never attach private documents to public issues; report vulnerabilities through [the private process](SECURITY.md).
+Updates remain explicit and operator-controlled. The release manifest binds the version, commit, immutable backend/web digests, schema boundary, backup requirement, reindex policy, architecture, and rollback mode. Automatic installation is not implemented.
+
+## Backup, restore, and security
+
+Database and document storage form one recovery unit. Create and verify a coordinated backup before upgrades, retain its manifest and checksums, and restore database and assets together when schema or storage compatibility requires it. See [Backup and restore](docs/BACKUP_RESTORE.md) and [Controlled updates](docs/UPDATES.md).
+
+PDI keeps document processing local by default, exposes no public document URLs, sanitizes operational errors, and separates application containers from host-level update authority. Protect `.env.release`, the TOTP encryption key, database credentials, IMAP secret files, backups, exports, logs, and private topology. See the [security policy](SECURITY.md), [application security model](docs/SECURITY.md), and [repository security model](docs/REPOSITORY_SECURITY.md).
+
+## Documentation index
+
+- [Final architecture snapshot](docs/FINAL_ARCHITECTURE.md)
+- [Lessons learned](docs/LESSONS_LEARNED.md)
+- [Project transition](docs/PROJECT_TRANSITION.md)
+- [Historical, unscheduled roadmap](docs/FUTURE_ROADMAP.md)
+- [Ingestion sources](docs/INGESTION_SOURCES.md), [OCR/intelligence](docs/INTELLIGENCE.md), [search](docs/RETRIEVAL.md), and [knowledge](docs/KNOWLEDGE.md)
+- [Operations](docs/OPERATIONS.md), [backup/restore](docs/BACKUP_RESTORE.md), [updates](docs/UPDATES.md), and [NAS deployment](docs/NAS_DEPLOYMENT.md)
+- [Release process](docs/RELEASES.md) and [v1.4.1 release notes](docs/releases/v1.4.1.md)
+
+PDI is released under the [MIT License](LICENSE). Never attach private documents, credentials, logs, backups, or deployment topology to public issues.
