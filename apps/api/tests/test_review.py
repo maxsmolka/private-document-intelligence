@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from pathlib import Path
 
 from httpx import AsyncClient
@@ -9,7 +10,12 @@ from pdi.ingestion.models import DocumentExtraction, MetadataProposal, ProposalS
 from pdi.search.models import SearchDocument
 
 
-async def seed_review(session: AsyncSession, suffix: str = "one") -> Document:
+async def seed_review(
+    session: AsyncSession,
+    suffix: str = "one",
+    *,
+    created_at: datetime | None = None,
+) -> Document:
     document = Document(
         title=f"Proposed {suffix}",
         original_filename=f"review-{suffix}.pdf",
@@ -20,6 +26,7 @@ async def seed_review(session: AsyncSession, suffix: str = "one") -> Document:
         status=DocumentStatus.NEEDS_REVIEW,
         life_area=LifeArea.OTHER,
         source="test",
+        created_at=created_at,
     )
     document.extraction = DocumentExtraction(
         provider="pypdf",
@@ -114,9 +121,10 @@ async def test_reject_proposal_and_retry_endpoint(
 async def test_review_queue_order_counter_and_explicit_completion(
     client: AsyncClient, session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
+    shared_created_at = datetime(2026, 8, 29, 12, 0, tzinfo=UTC)
     async with session_factory() as session:
-        first = await seed_review(session, "order-first")
-        second = await seed_review(session, "order-second")
+        first = await seed_review(session, "order-first", created_at=shared_created_at)
+        second = await seed_review(session, "order-second", created_at=shared_created_at)
         first_id, second_id = first.id, second.id
 
     initial = (await client.get("/api/v1/review")).json()
@@ -148,3 +156,24 @@ async def test_review_queue_order_counter_and_explicit_completion(
     final_queue = (await client.get("/api/v1/review")).json()
     assert final_queue["total"] == 1
     assert final_queue["items"][0]["document"]["id"] == remaining_id
+
+
+async def test_review_queue_orders_oldest_creation_before_uuid_tiebreaker(
+    client: AsyncClient, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    async with session_factory() as session:
+        newer = await seed_review(
+            session,
+            "order-newer",
+            created_at=datetime(2026, 8, 29, 12, 1, tzinfo=UTC),
+        )
+        older = await seed_review(
+            session,
+            "order-older",
+            created_at=datetime(2026, 8, 29, 12, 0, tzinfo=UTC),
+        )
+
+    ordered_ids = [
+        item["document"]["id"] for item in (await client.get("/api/v1/review")).json()["items"]
+    ]
+    assert ordered_ids == [str(older.id), str(newer.id)]

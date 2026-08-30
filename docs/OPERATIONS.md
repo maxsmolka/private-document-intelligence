@@ -11,7 +11,7 @@ Static cross-worker limits are configured as one JSON map in `PDI_EXECUTION_RESO
 
 For upgrades, use the sequence **backup → verify backup → pull exact immutable images → run migrations → restart → readiness → search verify**. The Controlled Update Manager formalizes this flow while preserving the [manual fallback](UPDATES.md). The API release image runs `alembic upgrade head` before serving traffic. A previous image may not understand a newer schema, so database rollback is not assumed safe; restore the verified pre-upgrade database and storage backup together when an upgrade is not backward compatible. See [RELEASES.md](RELEASES.md).
 
-Before upgrading to v1.1.0, add a protected `PDI_TOTP_ENCRYPTION_KEY` containing 32 random bytes in base64 form to `.env.release`. Keep that value with encrypted deployment-secret backups; losing or changing it makes enabled TOTP secrets unreadable. The key is passed only to the API service.
+Installations upgraded from a pre-v1.1 baseline must have a protected `PDI_TOTP_ENCRYPTION_KEY` containing 32 random bytes in base64 form in `.env.release`. Keep that value with encrypted deployment-secret backups; losing or changing it makes enabled TOTP secrets unreadable. The key is passed only to the API service.
 
 ## Fresh installation
 
@@ -38,6 +38,10 @@ docker compose down
 ```
 
 Enable optional sources with `docker compose --profile consume up -d consume` or `docker compose --profile mail up -d mail`. Queue and migration counts are included in `pdi readiness` and `GET /api/v1/operations/status`. Health endpoints remain public; operational APIs require a browser session.
+
+For NAS diagnostics, avoid raw `docker compose config` output because it expands secret-bearing environment values. Prefer targeted service/image queries or redact locally before sharing. The confirmed Synology layout, host port, mounts, and Compose ownership are in [NAS_DEPLOYMENT.md](NAS_DEPLOYMENT.md).
+
+The supported development baseline is Python 3.13 with `uv`, Node.js 22 with npm, Docker with Compose, and PostgreSQL 17 client tools. `pg_dump` and `pg_restore` are required for backup and restore verification. On Windows setups whose Docker lifecycle is tied to WSL, keep Compose in the foreground or maintain an active WSL session during container-dependent checks. If the engine stops with the WSL session, restart that lifecycle explicitly rather than interpreting it as a PDI failure.
 
 ## Backup, restore, export, and migration
 

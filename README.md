@@ -2,7 +2,7 @@
 
 PDI is a privacy-first, self-hosted system that turns private files into searchable, reviewable knowledge without making a cloud provider authoritative. It preserves immutable source assets, records extraction provenance, and keeps machine suggestions behind explicit human review.
 
-Version 1.1 provides a complete Paperless replacement path for a trusted private network, with local account administration, optional TOTP two-factor authentication, recovery codes, session and API-token controls, and transparent runtime/build information.
+Version 1.4.1 is the current maintenance baseline. It completes the standalone Paperless replacement path for a trusted private network, including external ingestion, controlled updates, structured search, deadline reminders, and full-cutover readiness. The current Alembic head remains `20260828_0020`.
 
 ## Capabilities
 
@@ -33,7 +33,7 @@ Next.js web ─────► FastAPI API ─────► PostgreSQL
 
 Document-bearing services run locally. Deterministic intelligence is the default; optional Ollama integration is explicit and local. PDI belongs on a private network or VPN behind an HTTPS reverse proxy, not directly on the Internet.
 
-Atlas is not part of PDI v1.0; it is reserved as a possible future, external read-only consumer of explicitly approved PDI data.
+Atlas is not part of the PDI v1.4.1 baseline; it is reserved as a possible future, external read-only consumer of explicitly approved PDI data.
 
 ## Quick start from source
 
@@ -57,11 +57,11 @@ cp .env.release.example .env.release
 docker compose --env-file .env.release -f compose.release.yaml up -d
 ```
 
-Open the configured HTTPS URL and complete `/setup`. The release Compose file pins the v1.2.0 backend and web images, exposes only the web port, uses persistent volumes, and defaults to secure cookies. Generate and protect the required TOTP encryption key, keep API/database access private, terminate TLS at a trusted proxy, and back up PostgreSQL and document storage together.
+Open the configured HTTPS URL and complete `/setup`. The release Compose file uses the v1.4.1 backend and web baseline, exposes only the web port, uses persistent volumes, and defaults to secure cookies. When applied last, the managed overlay pins every PDI application service to the operator-verified immutable image digests. Generate and protect the required TOTP encryption key, keep API/database access private, terminate TLS at a trusted proxy, and back up PostgreSQL and document storage together. Synology deployments must also follow the [NAS deployment baseline](docs/NAS_DEPLOYMENT.md).
 
 ## Development
 
-Requirements: Python 3.13, [uv](https://docs.astral.sh/uv/), Node.js 22/npm, and PostgreSQL 17.
+Requirements: Python 3.13, [uv](https://docs.astral.sh/uv/), Node.js 22/npm, Docker with Compose v2, and PostgreSQL 17 client tools. `pg_dump` and `pg_restore` are required by the backup/restore integration test.
 
 ```bash
 cp .env.example .env
@@ -86,8 +86,9 @@ Quality commands and contribution rules are in [CONTRIBUTING.md](CONTRIBUTING.md
 - [Account security and key management](docs/ACCOUNT_SECURITY.md)
 - [Repository and release security](docs/REPOSITORY_SECURITY.md)
 - [Operations](docs/OPERATIONS.md), [controlled updates](docs/UPDATES.md), [backup/restore](docs/BACKUP_RESTORE.md), and [cutover](docs/CUTOVER.md)
+- [NAS deployment baseline](docs/NAS_DEPLOYMENT.md) and [NAS update procedure](docs/NAS_UPDATES.md)
 - [Paperless migration](docs/PAPERLESS_MIGRATION.md), [full-cutover readiness](docs/PAPERLESS_CUTOVER_READINESS.md), and [open export](docs/EXPORT.md)
 - [Architecture](docs/ARCHITECTURE.md) and [future Atlas boundary](docs/ATLAS_INTEGRATION.md)
-- [First-run setup](docs/FIRST_RUN_SETUP.md), [release process](docs/RELEASES.md), and [v1.2.0 notes](docs/releases/v1.2.0.md)
+- [First-run setup](docs/FIRST_RUN_SETUP.md), [release process](docs/RELEASES.md), and [v1.4.1 notes](docs/releases/v1.4.1.md)
 
 PDI is released under the [MIT License](LICENSE). Never attach private documents to public issues; report vulnerabilities through [the private process](SECURITY.md).

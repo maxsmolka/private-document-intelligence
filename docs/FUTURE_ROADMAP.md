@@ -1,15 +1,56 @@
-# Future roadmap after v1.4.0
+# Roadmap after PDI v1.4.1
 
-These items are explicitly deferred. They are not implemented by the roadmap-completion program and are not prerequisites for PDI to remain a standalone document system.
+PDI v1.4.1 at schema `20260828_0020` is the maintenance baseline. The sequence below is planning, not implemented functionality, and does not authorize changes to a production NAS.
 
-## TODO A — Atlas Extension Foundation
+## v1.5 — Ingestion and operations hardening
 
-Assess extension registration, shared PDI identity and authorization, Ask, reasoning, briefings, agents, and cross-source synthesis. Atlas must reuse versioned scoped PDI APIs, retain PDI UUID/page provenance, and never duplicate PDI ownership of documents or document-derived canonical knowledge.
+Strengthen the real daily operating path before adding new intelligence features:
 
-## TODO B — Compute Core Integration Assessment
+- qualify consume and mail profiles across controlled updates, restarts, permission failures, duplicate input, and worker/OCR failures;
+- make shared-storage, effective-image, profile, backup, restore, and reconciliation checks easier to run without exposing secrets;
+- turn the confirmed NAS deployment invariants into repeatable release qualification and operator checklists;
+- improve ingestion, failed-item, retry, scheduler, backup-scheduler, reminder-scheduler, and overall readiness visibility;
+- regression-test idempotency, duplicate handling, and bounded recovery while preserving the durable handoff semantics (`processed` is not worker completion);
+- evaluate Nextcloud first as a simple synchronized/dropped consume folder; consider an optional read-only WebDAV adapter only if measured operating needs show that the folder path is insufficient;
+- evaluate unattended patch updates only after repeated restore drills and sufficient Controlled Update Manager operating experience.
 
-Evaluate a narrow optional `Execution Service → ComputeCoreExecutor → Compute Core` adapter only when measured OCR, local-LLM, embedding, Atlas, batch, or GPU workloads require it. PDI's PostgreSQL task state remains authoritative. Do not add a second scheduler or integration merely because the seam exists.
+Exit criteria include a documented, reproducible NAS update/rollback exercise with optional sources, one authoritative document store, matching immutable service digests, and no credential disclosure in diagnostics.
 
-## TODO C — Optional unattended patch updates
+## v1.6 — Intelligence quality
 
-Reassess unattended patch-only installation only after sufficient real-world experience with the Controlled Update Manager, reliable restore drills, explicit maintenance policy, notification/escalation, and a narrowly documented security-update trust model. Automatic merging or major-version installation remains out of scope.
+Improve extraction quality through measured evaluation rather than provider expansion by default. The OCR interface remains provider-neutral and the production baseline remains OCRmyPDF/Tesseract:
+
+- maintain a reproducible German/English corpus covering document classification, organizations, dates, identifiers, amounts, deadlines, invoices, contracts, insurance, tax documents, official notices, tables, forms, small text, columns, rotation/skew, and degraded scans;
+- evaluate PP-OCRv6 Medium as an optional local/offline provider against `ocrmypdf+tesseract`; do not make it a dependency during roadmap work;
+- measure character and word error rates, field/identifier/date/amount accuracy, classification and downstream-intelligence impact, false positives, evidence/confidence quality, processing latency, pages per second, batch throughput, failure rate, peak RAM, CPU, and GPU use where available;
+- assess model/image size, startup and model loading, caching, offline operation, amd64/NAS suitability, and whether an optional external inference worker is justified;
+- compare plain text, layout, reading order, bounding boxes, confidence, immutable extraction versions, provider/model identity, canonical extraction comparison, review, retry, and failure isolation;
+- adopt a new OCR path only if downstream PDI intelligence improves enough to justify its operational cost and all existing privacy, provenance, bounds, cancellation, and review safeguards remain intact;
+- keep vector/semantic retrieval optional until it passes relevance and infrastructure-value gates.
+
+Automatic selection is explicitly deferred. Later evidence may support a global or per-source provider, fallback, or escalation from insufficient native text and possibly low-confidence Tesseract output, but no such policy is chosen without benchmark data.
+
+## v1.7 — Personal knowledge
+
+Build document-backed personal knowledge only on reviewed, persisted evidence:
+
+- improve organizations, aliases, entity resolution, contracts, relationships, events, deadlines, and timelines;
+- preserve UUID/page provenance and explicit review for canonical creation, linking, merging, and status changes;
+- make merge/split, conflict handling, and historical changes explicit and auditable;
+- avoid unsupported date precision, automatic organization merges, or operational actions inferred only from document text. PDI remains the owner of these domains.
+
+## v1.8 — Dashboard
+
+Create a focused operational and personal overview using existing authoritative data:
+
+- new documents, review backlog, upcoming deadlines, active contracts, recent changes, ingestion failures, system and scheduler health, storage/backup state, and update posture;
+- saved searches, smart views, knowledge navigation, and privacy-preserving summaries with direct evidence links and clear stale/error states;
+- no second task store, hidden automation authority, or duplicated document ownership.
+
+## After v1.8 — Atlas extension foundation
+
+Assess extension registration, shared PDI identity and authorization, Ask, reasoning, briefings, agents, and cross-source synthesis. The first boundary is a read-only PDI adapter with scoped `search`, `get_document`, `get_evidence`, `organizations`, `contracts`, and `events` capabilities. Atlas must retain PDI UUID/page provenance and never duplicate PDI ownership of documents, OCR/extraction, search, evidence, organizations, contracts, events/deadlines, authentication, settings, operations, or canonical document-derived knowledge.
+
+## Compute Core decision gate
+
+Evaluate a narrow optional `Execution Service → ComputeCoreExecutor → Compute Core` adapter only when measurements show that OCR, local-LLM, embedding, Atlas, batch, or GPU workloads exceed the current execution model. PDI PostgreSQL task state remains authoritative. Do not introduce a second scheduler merely because an integration seam exists.

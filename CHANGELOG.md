@@ -2,6 +2,21 @@
 
 All notable changes are documented here. PDI follows Semantic Versioning.
 
+## [1.4.1] - 2026-08-29
+
+### Maintenance and operations
+
+- Align active release, setup, NAS, update, security, and operations documentation with the v1.4 maintenance baseline while preserving historical release and upgrade records.
+- Define the Synology port, Compose ownership, optional-profile lifecycle, shared document-storage invariant, consume handoff semantics, ACL posture, and secret-safe Compose diagnostics learned from the production deployment.
+- Pin API, worker, backup scheduler, reminder scheduler, consume, mail, and web through the managed immutable-digest overlay so optional services cannot silently run stale application images.
+- Keep optional profiles disabled by default and retain the constrained executor's five-service automatic restart boundary.
+- Make Review queue regression coverage deterministic for the documented oldest-creation-then-document-ID ordering.
+
+### Upgrade
+
+- Upgrade from v1.4.0 with no schema migration and no search reindex; Alembic head remains `20260828_0020`.
+- Retain the verified pre-update backup gate and use image-only rollback because this patch changes no database or storage format.
+
 ## [1.4.0] - 2026-08-28
 
 ### Added

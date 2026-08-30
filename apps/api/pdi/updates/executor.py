@@ -22,6 +22,15 @@ from pdi.updates.state import transition
 BACKEND_IMAGE = "ghcr.io/maxsmolka/private-document-intelligence/backend"
 WEB_IMAGE = "ghcr.io/maxsmolka/private-document-intelligence/web"
 ALLOWED_SERVICES = ("api", "worker", "backup-scheduler", "reminder-scheduler", "web")
+BACKEND_SERVICES = (
+    "api",
+    "worker",
+    "backup-scheduler",
+    "reminder-scheduler",
+    "consume",
+    "mail",
+)
+MANAGED_SERVICES = (*BACKEND_SERVICES, "web")
 
 
 class DeploymentExecutionError(RuntimeError):
@@ -98,10 +107,7 @@ def overlay_payload(backend_digest: str, web_digest: str) -> dict[str, object]:
     web = exact_image(WEB_IMAGE, web_digest)
     return {
         "services": {
-            "api": {"image": backend},
-            "worker": {"image": backend},
-            "backup-scheduler": {"image": backend},
-            "reminder-scheduler": {"image": backend},
+            **{service: {"image": backend} for service in BACKEND_SERVICES},
             "web": {"image": web},
         }
     }
@@ -211,6 +217,7 @@ class ComposeDeploymentExecutor:
             "run_id": str(run.id),
             "project": "pdi",
             "services": list(ALLOWED_SERVICES),
+            "managed_services": list(MANAGED_SERVICES),
             "target_backend": exact_image(BACKEND_IMAGE, run.target_backend_digest),
             "target_web": exact_image(WEB_IMAGE, run.target_web_digest),
             "migration": "alembic upgrade head" if run.migration_required else "not required",

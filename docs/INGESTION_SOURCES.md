@@ -17,6 +17,8 @@ Consume directories are trust boundaries: restrict writers, mount only the inten
 5. Start the source with `docker compose --env-file .env.release -f compose.release.yaml --profile consume up -d consume`, then confirm the source is healthy under **Settings → Ingestion**.
 6. Verify the first document reaches review and that its original is downloadable before treating the workflow as operational. Check `failed` and the admin source view after scanner or permission errors; correct the cause, then request a bounded retry in the UI.
 
+On the confirmed Synology deployment, every asset-handling service shares `<NAS_PDI_ROOT>/documents:/data/documents` and the private consume root is `<NAS_PDI_ROOT>/consume`; see [NAS_DEPLOYMENT.md](NAS_DEPLOYMENT.md). A source file reaching `processed` proves only that consume committed its handoff to PDI. Confirm the document's later worker/OCR state separately. The verified local OCR path is `ocrmypdf+tesseract`.
+
 Recommended defaults are PDF, 300 dpi, automatic orientation, deskew, and a 10-second stability window. Filenames help users recognize scans but are never authoritative metadata. OCR, dates, organizations, and document type still come from PDI's normal extraction and review pipeline.
 
 ## Read-only mail source

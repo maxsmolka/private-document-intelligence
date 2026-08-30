@@ -47,12 +47,13 @@ def test_final_release_policy_matches_managed_upgrade_boundary() -> None:
     policy_path = Path(__file__).resolve().parents[3] / "release-manifest-policy.json"
     policy = json.loads(policy_path.read_text(encoding="utf-8"))
 
-    assert policy["minimum_supported_version"] == "1.3.0"
-    assert policy["minimum_schema"] == "20260828_0015"
+    assert policy["minimum_supported_version"] == "1.4.0"
+    assert policy["minimum_schema"] == "20260828_0020"
     assert policy["target_schema"] == "20260828_0020"
-    assert policy["migration_required"] is True
-    assert policy["reindex_required"] is True
+    assert policy["migration_required"] is False
+    assert policy["reindex_required"] is False
     assert policy["backup_required"] is True
+    assert policy["rollback_mode"] == "image_only"
 
 
 def manifest(**overrides: object) -> dict[str, object]:
@@ -401,6 +402,15 @@ async def test_constrained_executor_dry_run_and_successful_update(
             "reminder-scheduler",
             "web",
         ]
+        assert dry["managed_services"] == [
+            "api",
+            "worker",
+            "backup-scheduler",
+            "reminder-scheduler",
+            "consume",
+            "mail",
+            "web",
+        ]
         assert json.loads(overlay.read_text())["services"]["api"]["image"].endswith(DIGEST_A)
         completed = await executor.execute(session, Settings(env="test"), run)
         assert completed.state == UpdateState.COMPLETED, (
@@ -410,7 +420,17 @@ async def test_constrained_executor_dry_run_and_successful_update(
         assert completed.schema_after == "20260827_0014"
         assert completed.executor_lease_id is None
         assert completed.executor_lease_expires_at is None
-        assert json.loads(overlay.read_text())["services"]["api"]["image"].endswith(DIGEST_C)
+        installed_overlay = json.loads(overlay.read_text())["services"]
+        for service in (
+            "api",
+            "worker",
+            "backup-scheduler",
+            "reminder-scheduler",
+            "consume",
+            "mail",
+        ):
+            assert installed_overlay[service]["image"].endswith(DIGEST_C)
+        assert installed_overlay["web"]["image"].endswith(DIGEST_D)
         assert not any("latest" in argument for call in calls for argument in call)
         rendered_calls = [" ".join(call) for call in calls]
         rebuild_index = next(
