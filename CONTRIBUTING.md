@@ -1,5 +1,7 @@
 # Contributing
 
+> Feature development is paused after v1.4.1 and there is no active milestone. These instructions are retained for security reports and for any explicitly resumed maintenance work; they do not represent an active feature backlog.
+
 Thank you for helping improve PDI. Before opening a change, search existing issues and keep proposals focused. Security reports belong in the private channel described in [SECURITY.md](SECURITY.md).
 
 This repository and its CI output are public. Use only synthetic or fully redacted fixtures, screenshots, logs, and examples. Do not paste production output or private deployment topology into issues, pull requests, commit messages, test snapshots, or Actions logs. When in doubt, leave the material out and ask through a privacy-safe description.

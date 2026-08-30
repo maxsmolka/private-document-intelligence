@@ -1,5 +1,7 @@
 # Functional Verification
 
+> Historical verification record. The checklists and limitations below document earlier milestone qualification and are not active project commitments after the v1.4.1 feature-development pause.
+
 Verified on 2026-08-22 against the local PDI pilot instance. Paperless was not accessed. Browser checks used authenticated, user-visible workflows; automated checks used both SQLite and an isolated temporary PostgreSQL database.
 
 ## v1.0 UX implementation verification
