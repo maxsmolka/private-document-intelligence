@@ -1,10 +1,12 @@
 version: 2
+# Version-update pull requests are paused with feature development after v1.4.1.
+# GitHub vulnerability alerts and security updates remain separate repository controls.
 updates:
   - package-ecosystem: pip
     directory: /apps/api
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     groups:
       python-patch-minor:
         patterns: ["*"]
@@ -13,7 +15,7 @@ updates:
     directory: /apps/web
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     groups:
       web-patch-minor:
         patterns: ["*"]
@@ -23,7 +25,7 @@ updates:
     directory: /
     schedule:
       interval: monthly
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 0
     groups:
       actions-patch-minor:
         patterns: ["*"]
